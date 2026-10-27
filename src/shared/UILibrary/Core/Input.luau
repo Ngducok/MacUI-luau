@@ -72,11 +72,12 @@ end
 
 -- Calls onMove(position) until the pointer is released. Returns a stop function.
 function Input.drag(start: InputObject, onMove: (Vector2) -> (), onEnd: (() -> ())?): () -> ()
-	local moved, ended
+	local moved, ended, unfocused
 	local function stop()
 		if moved then
 			moved:Disconnect()
 			ended:Disconnect()
+			unfocused:Disconnect()
 			moved = nil
 			if onEnd then
 				onEnd()
@@ -87,6 +88,7 @@ function Input.drag(start: InputObject, onMove: (Vector2) -> (), onEnd: (() -> (
 	moved = UserInputService.InputChanged:Connect(function(input)
 		if (start.UserInputType == Enum.UserInputType.Touch and input == start)
 			or (start.UserInputType == Enum.UserInputType.MouseButton1 and input.UserInputType == Enum.UserInputType.MouseMovement) then
+			if input.UserInputState == Enum.UserInputState.Cancel then stop() return end
 			onMove(Input.position(input))
 		end
 	end)
@@ -95,6 +97,7 @@ function Input.drag(start: InputObject, onMove: (Vector2) -> (), onEnd: (() -> (
 			stop()
 		end
 	end)
+	unfocused = UserInputService.WindowFocusReleased:Connect(stop)
 	onMove(Input.position(start))
 	return stop
 end

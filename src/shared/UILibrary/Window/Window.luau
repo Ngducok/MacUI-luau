@@ -22,6 +22,7 @@ local Sidebar = require(script.Parent.Sidebar)
 local Account = require(script.Parent.Account)
 local Page = require(script.Parent.Page)
 local DragResize = require(script.Parent.DragResize)
+local MobileLauncher = require(script.Parent.MobileLauncher)
 
 local HEADER = 48
 local MARGIN = 12
@@ -44,6 +45,9 @@ export type Options = {
 	MaximizeKey: Enum.KeyCode?, -- Ctrl+Shift+key; Unknown disables the recovery shortcut.
 	Resizable: boolean?,
 	Draggable: boolean?,
+	MobileTouchDrag: boolean?,
+	MobileToggleButton: boolean?,
+	MobileTogglePosition: "Left" | "Right"?,
 	Maximizable: boolean?,
 	Scale: number?,
 	AutoScale: boolean?,
@@ -65,6 +69,9 @@ function Window.new(options: Options)
 		Subtitle = "Account",
 		Resizable = true,
 		Draggable = true,
+		MobileTouchDrag = true,
+		MobileToggleButton = true,
+		MobileTogglePosition = "Right",
 		Maximizable = true,
 		ToggleKey = Enum.KeyCode.RightShift,
 		AutoScale = true,
@@ -75,6 +82,10 @@ function Window.new(options: Options)
 		BackgroundTransparency = 0.1,
 	}, options)
 	local account = Account.resolve(options)
+	for _, key in { "MobileTouchDrag", "MobileToggleButton" } do
+		assert(type(options[key]) == "boolean", `{key} must be a boolean`)
+	end
+	assert(options.MobileTogglePosition == "Left" or options.MobileTogglePosition == "Right", "MobileTogglePosition must be Left or Right")
 	options.MaximizeKey = options.MaximizeKey or (if options.ToggleKey == Enum.KeyCode.M then Enum.KeyCode.F10 else Enum.KeyCode.M)
 	assert(typeof(options.MaximizeKey) == "EnumItem" and options.MaximizeKey.EnumType == Enum.KeyCode, "MaximizeKey must be a KeyCode")
 	assert(options.MaximizeKey == Enum.KeyCode.Unknown or (options.MaximizeKey ~= options.ToggleKey and options.MaximizeKey ~= Enum.KeyCode.K), "MaximizeKey conflicts with an existing window shortcut")
@@ -177,6 +188,9 @@ function Window.new(options: Options)
 	self.cleanup:add(function()
 		Blur.release(self, 0)
 	end)
+	if options.MobileToggleButton then
+		self.mobileLauncher = self.cleanup:add(MobileLauncher.new(self))
+	end
 	self:Show()
 	if account.enabled then
 		self:AddPage({ Id = "account", Title = "Account", Icon = "person", Sidebar = false,
@@ -513,6 +527,13 @@ function Window:_fitScale(vp: Vector2): number
 	if not self.options.AutoScale then
 		return self.options.Scale
 	end
+	if UserInputService.TouchEnabled and math.min(vp.X, vp.Y) <= 600 then
+		-- Fit the requested size, not the resized window: free resize must still change its visible size.
+		local requested = self.options.Size or UDim2.fromOffset(860, 520)
+		return math.min(self.options.Scale, 0.7,
+			(vp.X - MARGIN * 2) / math.max(requested.X.Offset, self.minSize.X),
+			(vp.Y - MARGIN * 2) / math.max(requested.Y.Offset, self.minSize.Y))
+	end
 	local fit = math.min((vp.X - MARGIN * 2) / self.minSize.X, (vp.Y - MARGIN * 2) / self.minSize.Y)
 	return math.min(self.options.Scale, math.max(MIN_SCALE, fit))
 end
@@ -719,6 +740,16 @@ end
 
 -- Visibility
 
+function Window:_syncLoadingAnimations()
+	for _, page in self.pageOrder do
+		for _, section in page.sections do
+			for _, card in section.cards do
+				if card.spinner.Visible then card:SetLoading(true) end
+			end
+		end
+	end
+end
+
 function Window:_setBlur(visible: boolean)
 	if visible and self.options.BlurEnabled then
 		Blur.set(self, self.options.BlurSize, self.options.BlurTweenTime)
@@ -732,6 +763,8 @@ function Window:Show()
 		return
 	end
 	self.visible = true
+	self:_syncLoadingAnimations()
+	if self.mobileLauncher then self.mobileLauncher:refresh() end
 	self.root.Visible = true
 	self:_apply(false)
 	self.frame.Parent = self.fade
@@ -760,6 +793,8 @@ function Window:Hide()
 		return
 	end
 	self.visible = false
+	self:_syncLoadingAnimations()
+	if self.mobileLauncher then self.mobileLauncher:refresh() end
 	if self.stopDrag then self.stopDrag() end
 	self.popups:closeAll()
 	self:_setBlur(false)

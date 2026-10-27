@@ -553,7 +553,7 @@ function Card:SetLoading(loading: boolean)
 		self.stopSpin()
 		self.stopSpin = nil
 	end
-	if loading then
+	if loading and self.section.page.window.visible then
 		self.stopSpin = Animations.spin(self.spinner)
 	end
 end

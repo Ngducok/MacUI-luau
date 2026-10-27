@@ -26,7 +26,7 @@ function DragResize.canDrag(window, target: GuiObject?, point: Vector2, touch: b
 	local node = target
 	while node do
 		if node:GetAttribute("NoWindowDrag") or node:GetAttribute("DragBlock") or node:IsA("TextBox")
-			or (node:IsA("GuiButton") and node:GetAttribute("NoWindowDrag") ~= false) then
+			or (node:IsA("GuiButton") and (touch or node:GetAttribute("NoWindowDrag") ~= false)) then
 			return false
 		end
 		if node:IsA("ScrollingFrame") and node.ScrollingEnabled then
@@ -54,12 +54,20 @@ function DragResize.drag(window)
 		if window.stopDrag == controller.stop then window.stopDrag = nil end
 	end
 	function controller:begin(input)
-		if not window.options.Draggable or not window.visible or window.maximized or window.stopDrag or not Input.isPointer(input) then return false end
+		if window.destroyed or not window.options.Draggable or not window.visible or window.maximized or window.stopDrag or not Input.isPointer(input) then return false end
 		local point = Input.position(input)
 		local touch = input.UserInputType == Enum.UserInputType.Touch
+		if touch and window.options.MobileTouchDrag == false then return false end
 		local target = DragResize.target(window, point)
 		if not DragResize.canDrag(window, target, point, touch) then return false end
-		self.candidate = { input = input, point = point, position = window.position, dragging = false }
+		-- Root UIScale changes size; only scaled ancestors change Position units.
+		local root, parentScale = window.root, Vector2.new(1, 1)
+		local logical = Vector2.new(root.Size.X.Offset, root.Size.Y.Offset) * window.uiScale.Scale
+		if logical.X > 0 and logical.Y > 0 and root.AbsoluteSize.X > 0 and root.AbsoluteSize.Y > 0 then
+			parentScale = root.AbsoluteSize / logical
+		end
+		self.candidate = { input = input, point = point, position = window.position, parentScale = parentScale,
+			threshold = if touch then 8 else 4, dragging = false }
 		window.stopDrag = controller.stop
 		return false
 	end
@@ -67,11 +75,11 @@ function DragResize.drag(window)
 		local drag = self.candidate
 		if not drag or (if drag.input.UserInputType == Enum.UserInputType.Touch then input ~= drag.input
 			else input.UserInputType ~= Enum.UserInputType.MouseMovement) then return end
+		if input.UserInputState == Enum.UserInputState.Cancel then controller.stop() return end
 		local point = Input.position(input)
-		if not drag.dragging and (point - drag.point).Magnitude < 4 then return end
+		if not drag.dragging and (point - drag.point).Magnitude < drag.threshold then return end
 		drag.dragging = true
-		-- Root UIScale changes its size, not its parent-relative Position: apply physical delta once.
-		window.position = drag.position + point - drag.point
+		window.position = drag.position + (point - drag.point) / drag.parentScale
 		window:_apply(false)
 	end
 	function controller:finish(input)
@@ -80,9 +88,14 @@ function DragResize.drag(window)
 			and input.UserInputType == Enum.UserInputType.MouseButton1)) then return end
 		controller.stop()
 	end
-	window.cleanup:add(Input.listen(function(input) return controller:begin(input) end))
+	window.cleanup:add(Input.listen(function(input)
+		if input.UserInputType ~= Enum.UserInputType.Touch then return controller:begin(input) end
+		return false
+	end))
+	window.cleanup:connect(UserInputService.TouchStarted, function(input) controller:begin(input) end)
 	window.cleanup:connect(UserInputService.InputChanged, function(input) controller:move(input) end)
 	window.cleanup:connect(UserInputService.InputEnded, function(input) controller:finish(input) end)
+	window.cleanup:connect(UserInputService.WindowFocusReleased, controller.stop)
 	window.cleanup:add(controller.stop)
 	return controller
 end

@@ -126,6 +126,13 @@ function Sidebar.new(window, parent: GuiObject, options)
 	self.cleanup:connect(self.list:GetPropertyChangedSignal("AbsoluteSize"), function()
 		self:_placePill(false)
 	end)
+	local function updateScrolling()
+		-- A fitted nav list is background between rows, not a touch scrolling surface.
+		self.list.ScrollingEnabled = self.list.AbsoluteCanvasSize.Y > self.list.AbsoluteWindowSize.Y
+	end
+	self.cleanup:connect(self.list:GetPropertyChangedSignal("AbsoluteCanvasSize"), updateScrolling)
+	self.cleanup:connect(self.list:GetPropertyChangedSignal("AbsoluteWindowSize"), updateScrolling)
+	updateScrolling()
 	self.cleanup:connect(self.list:FindFirstChildOfClass("UIListLayout"):GetPropertyChangedSignal("AbsoluteContentSize"), function()
 		self:_placePill(false)
 	end)

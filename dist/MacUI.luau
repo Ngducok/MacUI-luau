@@ -1,6 +1,6 @@
 -- MacUI | https://github.com/Ngducok/MacUI-luau
 local nodes = { [""] = { Name = "MacUI" } }
-for _, path in { "Components", "Core", "Overlays", "Window", "Components/AnimatedImage", "Components/Button", "Components/Card", "Components/ColorPicker", "Components/Control", "Components/Display", "Components/Dropdown", "Components/Input", "Components/Keybind", "Components/Slider", "Components/Toggle", "Core/Animations", "Core/Blur", "Core/Cleanup", "Core/Factory", "Core/Icons", "Core/Input", "Core/Registry", "Core/Store", "Core/Theme", "Core/Util", "Overlays/CommandPalette", "Overlays/Dialog", "Overlays/Notifications", "Overlays/PopupManager", "Window/Account", "Window/DragResize", "Window/Page", "Window/Section", "Window/Sidebar", "Window/Window" } do
+for _, path in { "Components", "Core", "Overlays", "Window", "Components/AnimatedImage", "Components/Button", "Components/Card", "Components/ColorPicker", "Components/Control", "Components/Display", "Components/Dropdown", "Components/Input", "Components/Keybind", "Components/Slider", "Components/Toggle", "Core/Animations", "Core/Blur", "Core/Cleanup", "Core/Factory", "Core/Icons", "Core/Input", "Core/Registry", "Core/Store", "Core/Theme", "Core/Util", "Overlays/CommandPalette", "Overlays/Dialog", "Overlays/Notifications", "Overlays/PopupManager", "Window/Account", "Window/DragResize", "Window/MobileLauncher", "Window/Page", "Window/Section", "Window/Sidebar", "Window/Window" } do
     local parent, name = string.match(path, "^(.*)/([^/]+)$")
     if not name then parent, name = "", path end
     local node = { Name = name, Parent = nodes[parent] }
@@ -905,7 +905,7 @@ function Card:SetLoading(loading: boolean)
 		self.stopSpin()
 		self.stopSpin = nil
 	end
-	if loading then
+	if loading and self.section.page.window.visible then
 		self.stopSpin = Animations.spin(self.spinner)
 	end
 end
@@ -3365,11 +3365,12 @@ end
 
 -- Calls onMove(position) until the pointer is released. Returns a stop function.
 function Input.drag(start: InputObject, onMove: (Vector2) -> (), onEnd: (() -> ())?): () -> ()
-	local moved, ended
+	local moved, ended, unfocused
 	local function stop()
 		if moved then
 			moved:Disconnect()
 			ended:Disconnect()
+			unfocused:Disconnect()
 			moved = nil
 			if onEnd then
 				onEnd()
@@ -3380,6 +3381,7 @@ function Input.drag(start: InputObject, onMove: (Vector2) -> (), onEnd: (() -> (
 	moved = UserInputService.InputChanged:Connect(function(input)
 		if (start.UserInputType == Enum.UserInputType.Touch and input == start)
 			or (start.UserInputType == Enum.UserInputType.MouseButton1 and input.UserInputType == Enum.UserInputType.MouseMovement) then
+			if input.UserInputState == Enum.UserInputState.Cancel then stop() return end
 			onMove(Input.position(input))
 		end
 	end)
@@ -3388,6 +3390,7 @@ function Input.drag(start: InputObject, onMove: (Vector2) -> (), onEnd: (() -> (
 			stop()
 		end
 	end)
+	unfocused = UserInputService.WindowFocusReleased:Connect(stop)
 	onMove(Input.position(start))
 	return stop
 end
@@ -5223,7 +5226,7 @@ function DragResize.canDrag(window, target: GuiObject?, point: Vector2, touch: b
 	local node = target
 	while node do
 		if node:GetAttribute("NoWindowDrag") or node:GetAttribute("DragBlock") or node:IsA("TextBox")
-			or (node:IsA("GuiButton") and node:GetAttribute("NoWindowDrag") ~= false) then
+			or (node:IsA("GuiButton") and (touch or node:GetAttribute("NoWindowDrag") ~= false)) then
 			return false
 		end
 		if node:IsA("ScrollingFrame") and node.ScrollingEnabled then
@@ -5251,12 +5254,20 @@ function DragResize.drag(window)
 		if window.stopDrag == controller.stop then window.stopDrag = nil end
 	end
 	function controller:begin(input)
-		if not window.options.Draggable or not window.visible or window.maximized or window.stopDrag or not Input.isPointer(input) then return false end
+		if window.destroyed or not window.options.Draggable or not window.visible or window.maximized or window.stopDrag or not Input.isPointer(input) then return false end
 		local point = Input.position(input)
 		local touch = input.UserInputType == Enum.UserInputType.Touch
+		if touch and window.options.MobileTouchDrag == false then return false end
 		local target = DragResize.target(window, point)
 		if not DragResize.canDrag(window, target, point, touch) then return false end
-		self.candidate = { input = input, point = point, position = window.position, dragging = false }
+		-- Root UIScale changes size; only scaled ancestors change Position units.
+		local root, parentScale = window.root, Vector2.new(1, 1)
+		local logical = Vector2.new(root.Size.X.Offset, root.Size.Y.Offset) * window.uiScale.Scale
+		if logical.X > 0 and logical.Y > 0 and root.AbsoluteSize.X > 0 and root.AbsoluteSize.Y > 0 then
+			parentScale = root.AbsoluteSize / logical
+		end
+		self.candidate = { input = input, point = point, position = window.position, parentScale = parentScale,
+			threshold = if touch then 8 else 4, dragging = false }
 		window.stopDrag = controller.stop
 		return false
 	end
@@ -5264,11 +5275,11 @@ function DragResize.drag(window)
 		local drag = self.candidate
 		if not drag or (if drag.input.UserInputType == Enum.UserInputType.Touch then input ~= drag.input
 			else input.UserInputType ~= Enum.UserInputType.MouseMovement) then return end
+		if input.UserInputState == Enum.UserInputState.Cancel then controller.stop() return end
 		local point = Input.position(input)
-		if not drag.dragging and (point - drag.point).Magnitude < 4 then return end
+		if not drag.dragging and (point - drag.point).Magnitude < drag.threshold then return end
 		drag.dragging = true
-		-- Root UIScale changes its size, not its parent-relative Position: apply physical delta once.
-		window.position = drag.position + point - drag.point
+		window.position = drag.position + (point - drag.point) / drag.parentScale
 		window:_apply(false)
 	end
 	function controller:finish(input)
@@ -5277,9 +5288,14 @@ function DragResize.drag(window)
 			and input.UserInputType == Enum.UserInputType.MouseButton1)) then return end
 		controller.stop()
 	end
-	window.cleanup:add(Input.listen(function(input) return controller:begin(input) end))
+	window.cleanup:add(Input.listen(function(input)
+		if input.UserInputType ~= Enum.UserInputType.Touch then return controller:begin(input) end
+		return false
+	end))
+	window.cleanup:connect(UserInputService.TouchStarted, function(input) controller:begin(input) end)
 	window.cleanup:connect(UserInputService.InputChanged, function(input) controller:move(input) end)
 	window.cleanup:connect(UserInputService.InputEnded, function(input) controller:finish(input) end)
+	window.cleanup:connect(UserInputService.WindowFocusReleased, controller.stop)
 	window.cleanup:add(controller.stop)
 	return controller
 end
@@ -5336,6 +5352,132 @@ function DragResize.resize(window, frame: GuiObject)
 end
 
 return DragResize
+
+end
+
+-- Window/MobileLauncher
+loaders[nodes["Window/MobileLauncher"]] = function(script, require)
+local Core = script.Parent.Parent.Core
+local Factory = require(Core.Factory)
+local Icons = require(Core.Icons)
+local Theme = require(Core.Theme)
+local Animations = require(Core.Animations)
+local Cleanup = require(Core.Cleanup)
+local Input = require(Core.Input)
+
+local SIZE, MARGIN = 48, 12
+local MobileLauncher = {}
+MobileLauncher.__index = MobileLauncher
+
+function MobileLauncher.new(window)
+	local self = setmetatable({ window = window, cleanup = Cleanup.new() }, MobileLauncher)
+	self.gui = self.cleanup:add(Factory.new("ScreenGui", {
+		Name = "MacUILauncher", ResetOnSpawn = false,
+		ScreenInsets = Enum.ScreenInsets.CoreUISafeInsets,
+		ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
+		DisplayOrder = window.gui.DisplayOrder + 3, Parent = window.gui.Parent,
+	}))
+	self.area = Factory.new("Frame", { Name = "SafeArea", Size = UDim2.fromScale(1, 1),
+		BackgroundTransparency = 1, Parent = self.gui })
+	self.root = Factory.new("Frame", { Name = "Launcher", Size = UDim2.fromOffset(SIZE, SIZE),
+		BackgroundTransparency = 1, Parent = self.area })
+	for _, spread in { 4, 8 } do
+		Factory.new("Frame", { Name = "Shadow", AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.new(0.5, 0, 0.5, 3), Size = UDim2.fromOffset(SIZE + spread, SIZE + spread),
+			BackgroundTransparency = 0.94, Interactable = false, Parent = self.root,
+			Theme = { BackgroundColor3 = "Shadow" },
+		}, { Factory.new("UICorner", { CornerRadius = UDim.new(1, 0) }) })
+	end
+	local button = Factory.button({ Name = "ToggleMacUI", Size = UDim2.fromScale(1, 1),
+		BackgroundTransparency = 0.08, ZIndex = 2, Parent = self.root,
+		Theme = { BackgroundColor3 = "Palette" },
+	}, { Factory.new("UICorner", { CornerRadius = UDim.new(1, 0) }), Factory.stroke("PaletteBorder", 0.2) })
+	self.button = button
+	self.icon = Icons.create({ Icon = "sidebar", Color = "TextPrimary" }, 22, {
+		AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Parent = button,
+	})
+	self.cleanup:connect(button.InputBegan, function(input)
+		if self.stopDrag or not Input.isPointer(input) then return end
+		self.pointer, self.suppressActivation = input, false
+		local origin = Input.position(input)
+		local position = Vector2.new(self.root.Position.X.Offset, self.root.Position.Y.Offset)
+		self.stopDrag = Input.drag(input, function(point)
+			local delta = point - origin
+			if not self.suppressActivation and delta.Magnitude < 8 then return end
+			self.suppressActivation = true
+			self:_move(position + delta)
+		end, function()
+			if input.UserInputState ~= Enum.UserInputState.End then self.suppressActivation = true end
+			self.stopDrag = nil
+		end)
+	end)
+	self.cleanup:connect(button.Activated, function(input)
+		if input and input.UserInputType == Enum.UserInputType.Touch and input ~= self.pointer then return end
+		if self.suppressActivation and (not input or Input.isPointer(input)) then return end
+		window:Toggle()
+	end)
+	self.cleanup:add(function() if self.stopDrag then self.stopDrag() end end)
+	self.cleanup:connect(button:GetPropertyChangedSignal("GuiState"), function()
+		Theme.bind(button, { BackgroundColor3 = if button.GuiState == Enum.GuiState.Press then "SurfaceActive"
+			elseif button.GuiState == Enum.GuiState.Hover then "SurfaceHover" else "Palette" })
+		Animations.tween(button, { BackgroundTransparency = if button.GuiState == Enum.GuiState.Idle then 0.08 else 0 }, Theme.Motion.Hover)
+	end)
+	local function viewportChanged()
+		if self.stopDrag then self.stopDrag() end
+		self:_place()
+	end
+	self.cleanup:connect(self.area:GetPropertyChangedSignal("AbsoluteSize"), viewportChanged)
+	self.cleanup:connect(self.area:GetPropertyChangedSignal("AbsolutePosition"), viewportChanged)
+	self.cleanup:connect(window.root:GetPropertyChangedSignal("AbsoluteSize"), function() self:_place() end)
+	self:_place()
+	self:refresh()
+	return self
+end
+
+function MobileLauncher:_move(position: Vector2)
+	local size = self.area.AbsoluteSize
+	local x = math.round(math.clamp(position.X, 0, math.max(0, size.X - SIZE)))
+	local y = math.round(math.clamp(position.Y, 0, math.max(0, size.Y - SIZE)))
+	self.offset = Vector2.new(x, y)
+	self.root.Position = UDim2.fromOffset(x, y)
+end
+
+function MobileLauncher:_place()
+	local area, window = self.area, self.window
+	local size = area.AbsoluteSize
+	if size.X < SIZE or size.Y < SIZE then return end
+	if self.offset then self:_move(self.offset) return end
+	local marginX, marginY = math.min(MARGIN, (size.X - SIZE) / 2), math.min(MARGIN, (size.Y - SIZE) / 2)
+	local left, right = marginX, size.X - SIZE - marginX
+	local preferred = if window.options.MobileTogglePosition == "Left" then left else right
+	local other = if preferred == left then right else left
+	local pos, bounds = window.root.AbsolutePosition - area.AbsolutePosition, window.root.AbsoluteSize
+	local selected
+	for _, fraction in { 0.5, 0.25, 0.75 } do
+		local y = math.clamp(math.round(size.Y * fraction - SIZE / 2), marginY, size.Y - SIZE - marginY)
+		for _, x in { preferred, other } do
+			local candidate = Vector2.new(math.round(x), math.round(y))
+			selected = selected or candidate
+			if x + SIZE <= pos.X or x >= pos.X + bounds.X or y + SIZE <= pos.Y or y >= pos.Y + bounds.Y then
+				self.root.Position = UDim2.fromOffset(candidate.X, candidate.Y)
+				return
+			end
+		end
+	end
+	-- If the window fills the viewport, the higher DisplayOrder keeps the launcher reachable.
+	self.root.Position = UDim2.fromOffset(selected.X, selected.Y)
+end
+
+function MobileLauncher:refresh()
+	self.button:SetAttribute("WindowVisible", self.window.visible)
+	Icons.tint(self.icon, if self.window.visible then "TextPrimary" else "TextSecondary")
+end
+
+function MobileLauncher:Destroy()
+	self.cleanup:clean()
+end
+
+return MobileLauncher
 
 end
 
@@ -5852,6 +5994,13 @@ function Sidebar.new(window, parent: GuiObject, options)
 	self.cleanup:connect(self.list:GetPropertyChangedSignal("AbsoluteSize"), function()
 		self:_placePill(false)
 	end)
+	local function updateScrolling()
+		-- A fitted nav list is background between rows, not a touch scrolling surface.
+		self.list.ScrollingEnabled = self.list.AbsoluteCanvasSize.Y > self.list.AbsoluteWindowSize.Y
+	end
+	self.cleanup:connect(self.list:GetPropertyChangedSignal("AbsoluteCanvasSize"), updateScrolling)
+	self.cleanup:connect(self.list:GetPropertyChangedSignal("AbsoluteWindowSize"), updateScrolling)
+	updateScrolling()
 	self.cleanup:connect(self.list:FindFirstChildOfClass("UIListLayout"):GetPropertyChangedSignal("AbsoluteContentSize"), function()
 		self:_placePill(false)
 	end)
@@ -6358,6 +6507,7 @@ local Sidebar = require(script.Parent.Sidebar)
 local Account = require(script.Parent.Account)
 local Page = require(script.Parent.Page)
 local DragResize = require(script.Parent.DragResize)
+local MobileLauncher = require(script.Parent.MobileLauncher)
 
 local HEADER = 48
 local MARGIN = 12
@@ -6380,6 +6530,9 @@ export type Options = {
 	MaximizeKey: Enum.KeyCode?, -- Ctrl+Shift+key; Unknown disables the recovery shortcut.
 	Resizable: boolean?,
 	Draggable: boolean?,
+	MobileTouchDrag: boolean?,
+	MobileToggleButton: boolean?,
+	MobileTogglePosition: "Left" | "Right"?,
 	Maximizable: boolean?,
 	Scale: number?,
 	AutoScale: boolean?,
@@ -6401,6 +6554,9 @@ function Window.new(options: Options)
 		Subtitle = "Account",
 		Resizable = true,
 		Draggable = true,
+		MobileTouchDrag = true,
+		MobileToggleButton = true,
+		MobileTogglePosition = "Right",
 		Maximizable = true,
 		ToggleKey = Enum.KeyCode.RightShift,
 		AutoScale = true,
@@ -6411,6 +6567,10 @@ function Window.new(options: Options)
 		BackgroundTransparency = 0.1,
 	}, options)
 	local account = Account.resolve(options)
+	for _, key in { "MobileTouchDrag", "MobileToggleButton" } do
+		assert(type(options[key]) == "boolean", `{key} must be a boolean`)
+	end
+	assert(options.MobileTogglePosition == "Left" or options.MobileTogglePosition == "Right", "MobileTogglePosition must be Left or Right")
 	options.MaximizeKey = options.MaximizeKey or (if options.ToggleKey == Enum.KeyCode.M then Enum.KeyCode.F10 else Enum.KeyCode.M)
 	assert(typeof(options.MaximizeKey) == "EnumItem" and options.MaximizeKey.EnumType == Enum.KeyCode, "MaximizeKey must be a KeyCode")
 	assert(options.MaximizeKey == Enum.KeyCode.Unknown or (options.MaximizeKey ~= options.ToggleKey and options.MaximizeKey ~= Enum.KeyCode.K), "MaximizeKey conflicts with an existing window shortcut")
@@ -6513,6 +6673,9 @@ function Window.new(options: Options)
 	self.cleanup:add(function()
 		Blur.release(self, 0)
 	end)
+	if options.MobileToggleButton then
+		self.mobileLauncher = self.cleanup:add(MobileLauncher.new(self))
+	end
 	self:Show()
 	if account.enabled then
 		self:AddPage({ Id = "account", Title = "Account", Icon = "person", Sidebar = false,
@@ -6849,6 +7012,13 @@ function Window:_fitScale(vp: Vector2): number
 	if not self.options.AutoScale then
 		return self.options.Scale
 	end
+	if UserInputService.TouchEnabled and math.min(vp.X, vp.Y) <= 600 then
+		-- Fit the requested size, not the resized window: free resize must still change its visible size.
+		local requested = self.options.Size or UDim2.fromOffset(860, 520)
+		return math.min(self.options.Scale, 0.7,
+			(vp.X - MARGIN * 2) / math.max(requested.X.Offset, self.minSize.X),
+			(vp.Y - MARGIN * 2) / math.max(requested.Y.Offset, self.minSize.Y))
+	end
 	local fit = math.min((vp.X - MARGIN * 2) / self.minSize.X, (vp.Y - MARGIN * 2) / self.minSize.Y)
 	return math.min(self.options.Scale, math.max(MIN_SCALE, fit))
 end
@@ -7055,6 +7225,16 @@ end
 
 -- Visibility
 
+function Window:_syncLoadingAnimations()
+	for _, page in self.pageOrder do
+		for _, section in page.sections do
+			for _, card in section.cards do
+				if card.spinner.Visible then card:SetLoading(true) end
+			end
+		end
+	end
+end
+
 function Window:_setBlur(visible: boolean)
 	if visible and self.options.BlurEnabled then
 		Blur.set(self, self.options.BlurSize, self.options.BlurTweenTime)
@@ -7068,6 +7248,8 @@ function Window:Show()
 		return
 	end
 	self.visible = true
+	self:_syncLoadingAnimations()
+	if self.mobileLauncher then self.mobileLauncher:refresh() end
 	self.root.Visible = true
 	self:_apply(false)
 	self.frame.Parent = self.fade
@@ -7096,6 +7278,8 @@ function Window:Hide()
 		return
 	end
 	self.visible = false
+	self:_syncLoadingAnimations()
+	if self.mobileLauncher then self.mobileLauncher:refresh() end
 	if self.stopDrag then self.stopDrag() end
 	self.popups:closeAll()
 	self:_setBlur(false)
