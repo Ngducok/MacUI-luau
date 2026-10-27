@@ -3377,7 +3377,8 @@ function Input.drag(start: InputObject, onMove: (Vector2) -> (), onEnd: (() -> (
 	end
 
 	moved = UserInputService.InputChanged:Connect(function(input)
-		if Input.isMove(input) and (start.UserInputType ~= Enum.UserInputType.Touch or input == start) then
+		if (start.UserInputType == Enum.UserInputType.Touch and input == start)
+			or (start.UserInputType == Enum.UserInputType.MouseButton1 and input.UserInputType == Enum.UserInputType.MouseMovement) then
 			onMove(Input.position(input))
 		end
 	end)
@@ -5234,11 +5235,12 @@ function DragResize.resize(window, frame: GuiObject)
 	local grip = Factory.button({
 		Name = "ResizeGrip",
 		AnchorPoint = Vector2.new(1, 1),
-		Position = UDim2.new(1, -4, 1, -4),
-		Size = UDim2.fromOffset(18, 18),
+		Position = UDim2.new(1, -1, 1, -1),
+		Size = UDim2.fromOffset(24, 24),
 		ZIndex = 20,
 		Parent = frame,
 	})
+	grip:SetAttribute("NoWindowDrag", true)
 	Icons.create({ Icon = "square-corner-line-small", Color = "TextMuted" }, 14, {
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.fromScale(0.5, 0.5),
@@ -5248,19 +5250,34 @@ function DragResize.resize(window, frame: GuiObject)
 	})
 
 	window.cleanup:connect(grip.InputBegan, function(input)
-		if window.maximized or window.minimized or not Input.isPointer(input) then
+		if window.destroyed or not window.visible or not window.options.Resizable or window.maximized or window.minimized
+			or not grip.Visible or not Input.isPointer(input) then
 			return
 		end
-		if window.stopDrag then return end
+		if window.stopDrag then
+			local candidate = window.dragController and window.dragController.candidate
+			if not candidate or candidate.input ~= input then return end
+			window.stopDrag() -- The grip owns this input, even if the window listener ran first.
+		end
 		local startPoint = Input.position(input)
-		local startSize = window.size
+		local root = window.root
+		local startSize = Vector2.new(root.Size.X.Offset, root.Size.Y.Offset)
+		local actual = root.AbsoluteSize
+		if startSize.X <= 0 or startSize.Y <= 0 or actual.X <= 0 or actual.Y <= 0 then return end
+		local scale = actual / startSize -- Includes root UIScale and any scaled ancestors, exactly once.
+		local startPos, anchor = window.position, root.AnchorPoint
+		local ownScale = window.uiScale.Scale
 		window.stopDrag = Input.drag(input, function(point)
-			local scale = window.ctx.scale()
-			window.size = startSize + (point - startPoint) / scale
+			local size = startSize + (point - startPoint) / scale
+			window.size = Vector2.new(math.round(math.max(window.minSize.X, size.X)), math.round(math.max(window.minSize.Y, size.Y)))
+			window.position = startPos + (window.size - startSize) * anchor * ownScale
 			window:_apply(false)
 		end, function()
 			window.stopDrag = nil
 		end)
+	end)
+	window.cleanup:add(function()
+		if window.stopDrag then window.stopDrag() end
 	end)
 	return grip
 end
@@ -6741,8 +6758,7 @@ function Window:_apply(animate: boolean?)
 		self.size = room
 		self.position = Vector2.new(MARGIN, MARGIN)
 	else
-		local min = Vector2.new(math.min(self.minSize.X, room.X), math.min(self.minSize.Y, room.Y))
-		self.size = Vector2.new(math.round(math.clamp(self.size.X, min.X, room.X)), math.round(math.clamp(self.size.Y, min.Y, room.Y)))
+		self.size = Vector2.new(math.round(math.max(self.size.X, self.minSize.X)), math.round(math.max(self.size.Y, self.minSize.Y)))
 	end
 
 	local height = if self.minimized then HEADER else self.size.Y
@@ -6766,7 +6782,7 @@ function Window:_apply(animate: boolean?)
 	self.popups:setScale(scale)
 	self.notifications:setScale(scale)
 	if self.grip then
-		self.grip.Visible = not self.minimized and not self.maximized
+		self.grip.Visible = self.options.Resizable and not self.minimized and not self.maximized
 	end
 end
 

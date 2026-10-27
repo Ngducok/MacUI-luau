@@ -85,7 +85,8 @@ function Input.drag(start: InputObject, onMove: (Vector2) -> (), onEnd: (() -> (
 	end
 
 	moved = UserInputService.InputChanged:Connect(function(input)
-		if Input.isMove(input) and (start.UserInputType ~= Enum.UserInputType.Touch or input == start) then
+		if (start.UserInputType == Enum.UserInputType.Touch and input == start)
+			or (start.UserInputType == Enum.UserInputType.MouseButton1 and input.UserInputType == Enum.UserInputType.MouseMovement) then
 			onMove(Input.position(input))
 		end
 	end)

@@ -478,8 +478,7 @@ function Window:_apply(animate: boolean?)
 		self.size = room
 		self.position = Vector2.new(MARGIN, MARGIN)
 	else
-		local min = Vector2.new(math.min(self.minSize.X, room.X), math.min(self.minSize.Y, room.Y))
-		self.size = Vector2.new(math.round(math.clamp(self.size.X, min.X, room.X)), math.round(math.clamp(self.size.Y, min.Y, room.Y)))
+		self.size = Vector2.new(math.round(math.max(self.size.X, self.minSize.X)), math.round(math.max(self.size.Y, self.minSize.Y)))
 	end
 
 	local height = if self.minimized then HEADER else self.size.Y
@@ -503,7 +502,7 @@ function Window:_apply(animate: boolean?)
 	self.popups:setScale(scale)
 	self.notifications:setScale(scale)
 	if self.grip then
-		self.grip.Visible = not self.minimized and not self.maximized
+		self.grip.Visible = self.options.Resizable and not self.minimized and not self.maximized
 	end
 end
 
