@@ -1,7 +1,8 @@
 # MacUI
 ## Preview
 
-![MacUI Preview](demo.png)
+![MacUI Preview](demo/demo.png)
+![showcase](demo/ui.mp4)
 
 macOS / Raycast-inspired Roblox UI library for executors
 
