@@ -1,0 +1,23 @@
+# Publish only the library and files needed to use, build and test it.
+/*
+!/.gitignore
+!/README.md
+!/src/
+/src/*
+!/src/shared/
+/src/shared/*
+!/src/shared/UILibrary/
+!/dist/
+/dist/*
+!/dist/MacUI.luau
+!/examples/
+/examples/*
+!/examples/executor.luau
+!/tools/
+/tools/*
+!/tools/build.mjs
+!/tools/test.project.json
+!/tests/
+/tests/*
+!/tests/init.luau
+!/tests/bundle.test.mjs

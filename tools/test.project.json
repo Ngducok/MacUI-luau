@@ -1,0 +1,13 @@
+{
+  "name": "MacUI-tests",
+  "tree": {
+    "$className": "DataModel",
+    "ReplicatedStorage": {
+      "Shared": {
+        "$className": "Folder",
+        "UILibrary": { "$path": "../src/shared/UILibrary" },
+        "Tests": { "$path": "../tests" }
+      }
+    }
+  }
+}
