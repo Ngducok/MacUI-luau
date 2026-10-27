@@ -1,3 +1,6 @@
+
+
+
 # MacUI
 ## - macOS / Raycast-inspired Roblox UI library 
 
@@ -6,7 +9,7 @@
 ![MacUI Preview](demo/demo.png)
 
 ### video showcase
-![showcase](demo/ui.mp4)
+![showcase](https://github.com/user-attachments/assets/2439410c-05e0-4fcb-afd7-d058cc3f6f93)
 
 # Documentation
 **[Documentation](https://ngducok.github.io/MacUI-luau/)**
