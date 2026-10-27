@@ -30,13 +30,18 @@ return function(parent: Instance?)
 
 	local Session = Dashboard:AddSection({ Title = "Session" })
 
-	Session:AddCard({
+	local identity = Window:GetAccountPresentation()
+	local profile = Session:AddCard({
 		Id = "session-status",
-		Title = if player then player.DisplayName else "Account unavailable",
-		Description = if player then `Signed in as @{player.Name}` else "Open Play mode to view your account",
+		Title = identity.displayName,
+		Description = identity.sessionDescription,
 		Icon = "person",
 		NavigateTo = "account",
 	})
+	profile.cleanup:add(Window:ObserveAccount(function(data)
+		profile:SetTitle(data.displayName)
+		profile:SetDescription(data.sessionDescription)
+	end))
 
 	local Uptime = Session:AddCard({ Title = "Session time", Description = "Time since this window opened", Icon = "clock" })
 	local uptimeLabel = Uptime:AddLabel({ Title = "Elapsed", Value = "0s" })

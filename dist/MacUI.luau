@@ -930,6 +930,7 @@ function Card:SetDescription(description: string?)
 	self.options.Description = description
 	self.descriptionLabel.Text = description or ""
 	self.descriptionLabel.Visible = description ~= nil
+	self.ctx.registry:update(self.registryKey, { keywords = `{description or ""} {self.options.Keywords or ""}` })
 end
 
 function Card:GetEnabled(): boolean?
@@ -4010,6 +4011,11 @@ function CommandPalette:isOpen(): boolean
 	return self.popup ~= nil
 end
 
+function CommandPalette:refresh()
+	if self.closing then self.closing.finish() end
+	if self.session then self.session.refresh() end
+end
+
 function CommandPalette:toggle()
 	if self.popup then
 		self.popup.close()
@@ -4281,6 +4287,7 @@ function CommandPalette:open(initial: string?)
 		list.CanvasPosition = Vector2.zero
 		session.highlight(1)
 	end
+	session.refresh = render
 	local changed = cleanup:connect(query:GetPropertyChangedSignal("Text"), render)
 	render()
 
@@ -5052,7 +5059,59 @@ function Account.resolve(options)
 		userId = if player then player.UserId else nil,
 		subtitle = "Account",
 		avatars = {},
+		listeners = {},
 	}
+end
+
+-- Only presentation values belong in profile UI or its search metadata.
+function Account.presentation(window)
+	local account = window.account
+	local censored = account.censored ~= false
+	local username = if account.username then `@{account.username}` else "Unavailable in this session"
+	return {
+		censored = censored,
+		title = if censored then "Hidden User" else account.username or "Account",
+		displayName = if censored then "Hidden User" else account.displayName or "Account unavailable",
+		username = if censored then "@hidden" else username,
+		userId = if censored then "Hidden" elseif account.userId then tostring(account.userId) else "Unavailable in this session",
+		subtitle = "Account",
+		sessionDescription = if censored then "Account" elseif account.username then `Signed in as {username}` else "Open Play mode to view your account",
+		image = if censored then "" else account.thumbnail or "",
+	}
+end
+
+function Account.observe(window, fn)
+	local listeners = window.account.listeners
+	table.insert(listeners, fn)
+	fn(Account.presentation(window))
+	return function()
+		local index = table.find(listeners, fn)
+		if index then table.remove(listeners, index) end
+	end
+end
+
+function Account.refresh(window, refreshSearch: boolean?)
+	local data = Account.presentation(window)
+	for avatar in window.account.avatars do
+		avatar.Image = data.image
+		avatar.Fallback.Visible = data.image == ""
+	end
+	for _, fn in table.clone(window.account.listeners) do fn(data) end
+	-- Refresh after bindings have updated the searchable profile cards.
+	if refreshSearch then
+		if window.sidebar then window.sidebar:_filter(window.sidebar.query.Text) end
+		if window.palette then window.palette:refresh() end
+	end
+end
+
+function Account.initialize(window, store)
+	local _, enabled = store:define("AutoCensorUser", true)
+	window.account.censored = enabled
+	window.cleanup:add(store:observe("AutoCensorUser", function(value)
+		window.account.censored = value ~= false
+		Account.refresh(window, true)
+	end))
+	window.cleanup:add(function() table.clear(window.account.listeners) end)
 end
 
 -- Shared player portrait for the sidebar and account page.
@@ -5061,18 +5120,17 @@ function Account.avatar(window, size: number, cleanup)
 	local avatar = Factory.new("ImageLabel", {
 		Name = "Avatar",
 		Size = UDim2.fromOffset(size, size),
-		Image = account.thumbnail or "",
+		Image = Account.presentation(window).image,
 		ScaleType = Enum.ScaleType.Crop,
 		Theme = { BackgroundColor3 = "SurfaceActive" },
 	}, { Factory.new("UICorner", { CornerRadius = UDim.new(1, 0) }) })
-	if avatar.Image == "" then
-		Icons.create({ Icon = "person", Color = "TextPrimary" }, math.floor(size / 2), {
-			Name = "Fallback",
-			AnchorPoint = Vector2.new(0.5, 0.5),
-			Position = UDim2.fromScale(0.5, 0.5),
-			Parent = avatar,
-		})
-	end
+	Icons.create({ Icon = "person", Color = "TextPrimary" }, math.floor(size / 2), {
+		Name = "Fallback",
+		Visible = avatar.Image == "",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		Parent = avatar,
+	})
 	account.avatars[avatar] = true
 	cleanup:add(function() account.avatars[avatar] = nil end)
 	return avatar
@@ -5086,18 +5144,12 @@ function Account.loadThumbnail(window)
 			Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size420x420)
 		if window.destroyed or not ok or not ready or type(content) ~= "string" or content == "" then return end
 		account.thumbnail = content
-		for avatar in account.avatars do
-			if avatar.Parent then
-				avatar.Image = content
-				local fallback = avatar:FindFirstChild("Fallback")
-				if fallback then fallback.Visible = false end
-			end
-		end
+		Account.refresh(window)
 	end)
 end
 
 function Account.build(page)
-	local window, account = page.window, page.window.account
+	local window = page.window
 	page.empty.Visible = false
 	local hero = Factory.new("Frame", {
 		Name = "AccountIdentity",
@@ -5113,12 +5165,9 @@ function Account.build(page)
 		Size = UDim2.new(1, 0, 0, 24), LayoutOrder = 2, Parent = hero })
 	local identifier = Factory.text({ Name = "Identifier", Typography = "Description", TextXAlignment = Enum.TextXAlignment.Center,
 		Size = UDim2.new(1, 0, 0, 18), LayoutOrder = 3, Parent = hero, Theme = { TextColor3 = "TextSecondary" } })
-	name.Text = account.username or "Account"
-	identifier.Text = if account.username then `@{account.username}` else "Unavailable in this session"
 	local profile = page:AddSection({ Title = "Profile" })
-	local rows = if account.player then {
-		{ "Display name", account.displayName }, { "Username", `@{account.username}` }, { "User ID", tostring(account.userId) },
-	} else { { "Account details", "Unavailable in this session" } }
+	local values = {}
+	local rows = { { "Display name", "displayName" }, { "Username", "username" }, { "User ID", "userId" } }
 	for i, data in rows do
 		local row = Factory.new("Frame", {
 			Name = data[1], Size = UDim2.new(1, 0, 0, 44), BackgroundTransparency = 1,
@@ -5127,13 +5176,17 @@ function Account.build(page)
 		local fields = Factory.new("Frame", { Name = "Fields", Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Parent = row },
 			{ Factory.padding(0, 14), Factory.list(12, true) })
 		Factory.text({ Text = data[1], Size = UDim2.new(0, 0, 1, 0), Parent = fields, LayoutOrder = 1 }, { Factory.fill() })
-		Factory.text({ Name = "Value", Text = data[2], Typography = "Description", TextXAlignment = Enum.TextXAlignment.Right,
+		values[data[2]] = Factory.text({ Name = "Value", Typography = "Description", TextXAlignment = Enum.TextXAlignment.Right,
 			Size = UDim2.new(0.6, 0, 1, 0), Parent = fields, LayoutOrder = 2, Theme = { TextColor3 = "TextSecondary" } })
 		if i > 1 then
 			Factory.new("Frame", { Name = "Divider", Position = UDim2.fromOffset(14, 0), Size = UDim2.new(1, -28, 0, 1),
 				BackgroundTransparency = 0.45, Parent = row, Theme = { BackgroundColor3 = "Border" } })
 		end
 	end
+	page.cleanup:add(Account.observe(window, function(data)
+		name.Text, identifier.Text = data.title, data.username
+		for key, label in values do label.Text = data[key] end
+	end))
 end
 
 return Account
@@ -6002,6 +6055,9 @@ function Sidebar:_buildProfile(panel: Frame, options)
 		Parent = text,
 		Theme = { TextColor3 = "TextMuted" },
 	})
+	self.cleanup:add(Account.observe(self.window, function(data)
+		self.titleLabel.Text, self.subtitleLabel.Text = data.title, data.subtitle
+	end))
 	self.cleanup:connect(row.Activated, function()
 		self.window:SelectPage("account")
 	end)
@@ -6264,8 +6320,8 @@ end
 
 function Sidebar:setIdentity(title: string?, subtitle: string?)
 	-- Keep the legacy setter callable without replacing Roblox account identity.
-	self.titleLabel.Text = self.window.account.username or "Account"
-	self.subtitleLabel.Text = self.window.account.subtitle
+	local data = Account.presentation(self.window)
+	self.titleLabel.Text, self.subtitleLabel.Text = data.title, data.subtitle
 end
 
 function Sidebar:Destroy()
@@ -6358,7 +6414,6 @@ function Window.new(options: Options)
 	options.MaximizeKey = options.MaximizeKey or (if options.ToggleKey == Enum.KeyCode.M then Enum.KeyCode.F10 else Enum.KeyCode.M)
 	assert(typeof(options.MaximizeKey) == "EnumItem" and options.MaximizeKey.EnumType == Enum.KeyCode, "MaximizeKey must be a KeyCode")
 	assert(options.MaximizeKey == Enum.KeyCode.Unknown or (options.MaximizeKey ~= options.ToggleKey and options.MaximizeKey ~= Enum.KeyCode.K), "MaximizeKey conflicts with an existing window shortcut")
-	options.Title, options.Subtitle = account.username or "Account", account.subtitle
 	for _, key in { "Scale", "BlurSize", "BlurTweenTime", "BackgroundTransparency" } do
 		local value = options[key]
 		assert(value == nil or (type(value) == "number" and value == value and math.abs(value) < math.huge), `{key} must be a finite number`)
@@ -6391,6 +6446,10 @@ function Window.new(options: Options)
 		narrow = false,
 		toggleKey = options.ToggleKey,
 	}, Window)
+	local store = Store.new(options.Persistence)
+	Account.initialize(self, store)
+	local identity = Account.presentation(self)
+	options.Title, options.Subtitle = identity.title, identity.subtitle
 
 	local parent = options.Parent
 	if not parent then
@@ -6400,7 +6459,7 @@ function Window.new(options: Options)
 	end
 
 	self.gui = self.cleanup:add(Factory.new("ScreenGui", {
-		Name = options.Title,
+		Name = "MacUI",
 		ResetOnSpawn = false,
 		ScreenInsets = Enum.ScreenInsets.CoreUISafeInsets,
 		ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
@@ -6415,7 +6474,6 @@ function Window.new(options: Options)
 	})
 
 	local registry = Registry.new()
-	local store = Store.new(options.Persistence)
 	self.popups = self.cleanup:add(PopupManager.new(self.gui))
 	self.notifications = self.cleanup:add(Notifications.new(self.gui))
 	self.ctx = {
@@ -6660,6 +6718,12 @@ function Window:_buildFrame()
 	searchButton.LayoutOrder = 100
 	searchButton.Parent = self.headerActions
 	self.cleanup:add(Display.tooltip(self.popups, searchButton, "Search everything  (Ctrl+K)"))
+	self.optionsButton = Display.iconButton("three-dots-horizontal", 28, function()
+		self:_toggleOptions()
+	end)
+	self.optionsButton.Name = "Options"
+	self.optionsButton.LayoutOrder = 101
+	self.optionsButton.Parent = self.headerActions
 
 	self.body = Factory.new("Frame", {
 		Name = "Body",
@@ -6696,6 +6760,51 @@ function Window:_buildFrame()
 		self.grip = DragResize.resize(self, self.frame)
 	end
 	self:_updateHistoryButtons()
+end
+
+function Window:_toggleOptions()
+	if self.optionsPopup then self.optionsPopup.close() return end
+	local cleanup = Cleanup.new()
+	local menu = PopupManager.surface(212, { Name = "WindowOptions" })
+	Factory.padding(4).Parent = menu
+	local row = Factory.button({ Name = "AutoCensorUser", Size = UDim2.fromOffset(204, 32), Parent = menu,
+		Theme = { BackgroundColor3 = "SurfaceHover" } }, { Factory.corner(6) })
+	local check = Icons.create("check", 16, { Position = UDim2.fromOffset(8, 8), Parent = row })
+	Factory.text({ Text = "Auto Censor User", Position = UDim2.fromOffset(32, 0),
+		Size = UDim2.new(1, -40, 1, 0), Parent = row })
+	cleanup:add(self:ObserveAccount(function(data)
+		check.Visible = data.censored
+		row:SetAttribute("Checked", data.censored)
+	end))
+	cleanup:connect(row.MouseEnter, function()
+		Animations.tween(row, { BackgroundTransparency = 0 }, Theme.Motion.Hover)
+	end)
+	cleanup:connect(row.MouseLeave, function()
+		Animations.tween(row, { BackgroundTransparency = 1 }, Theme.Motion.Hover)
+	end)
+	cleanup:connect(row.Activated, function()
+		self:SetAutoCensorUser(not self:GetAccountPresentation().censored)
+	end)
+	self.optionsPopup = self.popups:open({ content = menu, anchor = self.optionsButton, align = "right",
+		onClose = function()
+			self.optionsPopup = nil
+			cleanup:clean()
+		end })
+end
+
+function Window:GetAccountPresentation()
+	return Account.presentation(self)
+end
+
+-- Immediately delivers current presentation; returns an unsubscribe function.
+function Window:ObserveAccount(fn)
+	assert(type(fn) == "function", "ObserveAccount requires a callback")
+	return Account.observe(self, fn)
+end
+
+function Window:SetAutoCensorUser(enabled: boolean)
+	assert(type(enabled) == "boolean", "AutoCensorUser must be a boolean")
+	self.ctx.store:set("AutoCensorUser", enabled)
 end
 
 function Window:_bindInput()
@@ -7108,6 +7217,7 @@ function Window:GetFlag(id: string): any
 end
 
 function Window:SetFlag(id: string, value: any)
+	if id == "AutoCensorUser" then assert(type(value) == "boolean", "AutoCensorUser must be a boolean") end
 	self.ctx.store:set(id, value)
 end
 

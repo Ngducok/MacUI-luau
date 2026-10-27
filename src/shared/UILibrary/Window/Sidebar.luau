@@ -329,6 +329,9 @@ function Sidebar:_buildProfile(panel: Frame, options)
 		Parent = text,
 		Theme = { TextColor3 = "TextMuted" },
 	})
+	self.cleanup:add(Account.observe(self.window, function(data)
+		self.titleLabel.Text, self.subtitleLabel.Text = data.title, data.subtitle
+	end))
 	self.cleanup:connect(row.Activated, function()
 		self.window:SelectPage("account")
 	end)
@@ -591,8 +594,8 @@ end
 
 function Sidebar:setIdentity(title: string?, subtitle: string?)
 	-- Keep the legacy setter callable without replacing Roblox account identity.
-	self.titleLabel.Text = self.window.account.username or "Account"
-	self.subtitleLabel.Text = self.window.account.subtitle
+	local data = Account.presentation(self.window)
+	self.titleLabel.Text, self.subtitleLabel.Text = data.title, data.subtitle
 end
 
 function Sidebar:Destroy()

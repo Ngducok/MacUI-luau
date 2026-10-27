@@ -578,6 +578,7 @@ function Card:SetDescription(description: string?)
 	self.options.Description = description
 	self.descriptionLabel.Text = description or ""
 	self.descriptionLabel.Visible = description ~= nil
+	self.ctx.registry:update(self.registryKey, { keywords = `{description or ""} {self.options.Keywords or ""}` })
 end
 
 function Card:GetEnabled(): boolean?

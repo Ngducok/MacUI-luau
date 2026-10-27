@@ -33,7 +33,59 @@ function Account.resolve(options)
 		userId = if player then player.UserId else nil,
 		subtitle = "Account",
 		avatars = {},
+		listeners = {},
 	}
+end
+
+-- Only presentation values belong in profile UI or its search metadata.
+function Account.presentation(window)
+	local account = window.account
+	local censored = account.censored ~= false
+	local username = if account.username then `@{account.username}` else "Unavailable in this session"
+	return {
+		censored = censored,
+		title = if censored then "Hidden User" else account.username or "Account",
+		displayName = if censored then "Hidden User" else account.displayName or "Account unavailable",
+		username = if censored then "@hidden" else username,
+		userId = if censored then "Hidden" elseif account.userId then tostring(account.userId) else "Unavailable in this session",
+		subtitle = "Account",
+		sessionDescription = if censored then "Account" elseif account.username then `Signed in as {username}` else "Open Play mode to view your account",
+		image = if censored then "" else account.thumbnail or "",
+	}
+end
+
+function Account.observe(window, fn)
+	local listeners = window.account.listeners
+	table.insert(listeners, fn)
+	fn(Account.presentation(window))
+	return function()
+		local index = table.find(listeners, fn)
+		if index then table.remove(listeners, index) end
+	end
+end
+
+function Account.refresh(window, refreshSearch: boolean?)
+	local data = Account.presentation(window)
+	for avatar in window.account.avatars do
+		avatar.Image = data.image
+		avatar.Fallback.Visible = data.image == ""
+	end
+	for _, fn in table.clone(window.account.listeners) do fn(data) end
+	-- Refresh after bindings have updated the searchable profile cards.
+	if refreshSearch then
+		if window.sidebar then window.sidebar:_filter(window.sidebar.query.Text) end
+		if window.palette then window.palette:refresh() end
+	end
+end
+
+function Account.initialize(window, store)
+	local _, enabled = store:define("AutoCensorUser", true)
+	window.account.censored = enabled
+	window.cleanup:add(store:observe("AutoCensorUser", function(value)
+		window.account.censored = value ~= false
+		Account.refresh(window, true)
+	end))
+	window.cleanup:add(function() table.clear(window.account.listeners) end)
 end
 
 -- Shared player portrait for the sidebar and account page.
@@ -42,18 +94,17 @@ function Account.avatar(window, size: number, cleanup)
 	local avatar = Factory.new("ImageLabel", {
 		Name = "Avatar",
 		Size = UDim2.fromOffset(size, size),
-		Image = account.thumbnail or "",
+		Image = Account.presentation(window).image,
 		ScaleType = Enum.ScaleType.Crop,
 		Theme = { BackgroundColor3 = "SurfaceActive" },
 	}, { Factory.new("UICorner", { CornerRadius = UDim.new(1, 0) }) })
-	if avatar.Image == "" then
-		Icons.create({ Icon = "person", Color = "TextPrimary" }, math.floor(size / 2), {
-			Name = "Fallback",
-			AnchorPoint = Vector2.new(0.5, 0.5),
-			Position = UDim2.fromScale(0.5, 0.5),
-			Parent = avatar,
-		})
-	end
+	Icons.create({ Icon = "person", Color = "TextPrimary" }, math.floor(size / 2), {
+		Name = "Fallback",
+		Visible = avatar.Image == "",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		Parent = avatar,
+	})
 	account.avatars[avatar] = true
 	cleanup:add(function() account.avatars[avatar] = nil end)
 	return avatar
@@ -67,18 +118,12 @@ function Account.loadThumbnail(window)
 			Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size420x420)
 		if window.destroyed or not ok or not ready or type(content) ~= "string" or content == "" then return end
 		account.thumbnail = content
-		for avatar in account.avatars do
-			if avatar.Parent then
-				avatar.Image = content
-				local fallback = avatar:FindFirstChild("Fallback")
-				if fallback then fallback.Visible = false end
-			end
-		end
+		Account.refresh(window)
 	end)
 end
 
 function Account.build(page)
-	local window, account = page.window, page.window.account
+	local window = page.window
 	page.empty.Visible = false
 	local hero = Factory.new("Frame", {
 		Name = "AccountIdentity",
@@ -94,12 +139,9 @@ function Account.build(page)
 		Size = UDim2.new(1, 0, 0, 24), LayoutOrder = 2, Parent = hero })
 	local identifier = Factory.text({ Name = "Identifier", Typography = "Description", TextXAlignment = Enum.TextXAlignment.Center,
 		Size = UDim2.new(1, 0, 0, 18), LayoutOrder = 3, Parent = hero, Theme = { TextColor3 = "TextSecondary" } })
-	name.Text = account.username or "Account"
-	identifier.Text = if account.username then `@{account.username}` else "Unavailable in this session"
 	local profile = page:AddSection({ Title = "Profile" })
-	local rows = if account.player then {
-		{ "Display name", account.displayName }, { "Username", `@{account.username}` }, { "User ID", tostring(account.userId) },
-	} else { { "Account details", "Unavailable in this session" } }
+	local values = {}
+	local rows = { { "Display name", "displayName" }, { "Username", "username" }, { "User ID", "userId" } }
 	for i, data in rows do
 		local row = Factory.new("Frame", {
 			Name = data[1], Size = UDim2.new(1, 0, 0, 44), BackgroundTransparency = 1,
@@ -108,13 +150,17 @@ function Account.build(page)
 		local fields = Factory.new("Frame", { Name = "Fields", Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Parent = row },
 			{ Factory.padding(0, 14), Factory.list(12, true) })
 		Factory.text({ Text = data[1], Size = UDim2.new(0, 0, 1, 0), Parent = fields, LayoutOrder = 1 }, { Factory.fill() })
-		Factory.text({ Name = "Value", Text = data[2], Typography = "Description", TextXAlignment = Enum.TextXAlignment.Right,
+		values[data[2]] = Factory.text({ Name = "Value", Typography = "Description", TextXAlignment = Enum.TextXAlignment.Right,
 			Size = UDim2.new(0.6, 0, 1, 0), Parent = fields, LayoutOrder = 2, Theme = { TextColor3 = "TextSecondary" } })
 		if i > 1 then
 			Factory.new("Frame", { Name = "Divider", Position = UDim2.fromOffset(14, 0), Size = UDim2.new(1, -28, 0, 1),
 				BackgroundTransparency = 0.45, Parent = row, Theme = { BackgroundColor3 = "Border" } })
 		end
 	end
+	page.cleanup:add(Account.observe(window, function(data)
+		name.Text, identifier.Text = data.title, data.username
+		for key, label in values do label.Text = data[key] end
+	end))
 end
 
 return Account

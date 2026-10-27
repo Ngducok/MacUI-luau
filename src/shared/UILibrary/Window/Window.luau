@@ -78,7 +78,6 @@ function Window.new(options: Options)
 	options.MaximizeKey = options.MaximizeKey or (if options.ToggleKey == Enum.KeyCode.M then Enum.KeyCode.F10 else Enum.KeyCode.M)
 	assert(typeof(options.MaximizeKey) == "EnumItem" and options.MaximizeKey.EnumType == Enum.KeyCode, "MaximizeKey must be a KeyCode")
 	assert(options.MaximizeKey == Enum.KeyCode.Unknown or (options.MaximizeKey ~= options.ToggleKey and options.MaximizeKey ~= Enum.KeyCode.K), "MaximizeKey conflicts with an existing window shortcut")
-	options.Title, options.Subtitle = account.username or "Account", account.subtitle
 	for _, key in { "Scale", "BlurSize", "BlurTweenTime", "BackgroundTransparency" } do
 		local value = options[key]
 		assert(value == nil or (type(value) == "number" and value == value and math.abs(value) < math.huge), `{key} must be a finite number`)
@@ -111,6 +110,10 @@ function Window.new(options: Options)
 		narrow = false,
 		toggleKey = options.ToggleKey,
 	}, Window)
+	local store = Store.new(options.Persistence)
+	Account.initialize(self, store)
+	local identity = Account.presentation(self)
+	options.Title, options.Subtitle = identity.title, identity.subtitle
 
 	local parent = options.Parent
 	if not parent then
@@ -120,7 +123,7 @@ function Window.new(options: Options)
 	end
 
 	self.gui = self.cleanup:add(Factory.new("ScreenGui", {
-		Name = options.Title,
+		Name = "MacUI",
 		ResetOnSpawn = false,
 		ScreenInsets = Enum.ScreenInsets.CoreUISafeInsets,
 		ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
@@ -135,7 +138,6 @@ function Window.new(options: Options)
 	})
 
 	local registry = Registry.new()
-	local store = Store.new(options.Persistence)
 	self.popups = self.cleanup:add(PopupManager.new(self.gui))
 	self.notifications = self.cleanup:add(Notifications.new(self.gui))
 	self.ctx = {
@@ -380,6 +382,12 @@ function Window:_buildFrame()
 	searchButton.LayoutOrder = 100
 	searchButton.Parent = self.headerActions
 	self.cleanup:add(Display.tooltip(self.popups, searchButton, "Search everything  (Ctrl+K)"))
+	self.optionsButton = Display.iconButton("three-dots-horizontal", 28, function()
+		self:_toggleOptions()
+	end)
+	self.optionsButton.Name = "Options"
+	self.optionsButton.LayoutOrder = 101
+	self.optionsButton.Parent = self.headerActions
 
 	self.body = Factory.new("Frame", {
 		Name = "Body",
@@ -416,6 +424,51 @@ function Window:_buildFrame()
 		self.grip = DragResize.resize(self, self.frame)
 	end
 	self:_updateHistoryButtons()
+end
+
+function Window:_toggleOptions()
+	if self.optionsPopup then self.optionsPopup.close() return end
+	local cleanup = Cleanup.new()
+	local menu = PopupManager.surface(212, { Name = "WindowOptions" })
+	Factory.padding(4).Parent = menu
+	local row = Factory.button({ Name = "AutoCensorUser", Size = UDim2.fromOffset(204, 32), Parent = menu,
+		Theme = { BackgroundColor3 = "SurfaceHover" } }, { Factory.corner(6) })
+	local check = Icons.create("check", 16, { Position = UDim2.fromOffset(8, 8), Parent = row })
+	Factory.text({ Text = "Auto Censor User", Position = UDim2.fromOffset(32, 0),
+		Size = UDim2.new(1, -40, 1, 0), Parent = row })
+	cleanup:add(self:ObserveAccount(function(data)
+		check.Visible = data.censored
+		row:SetAttribute("Checked", data.censored)
+	end))
+	cleanup:connect(row.MouseEnter, function()
+		Animations.tween(row, { BackgroundTransparency = 0 }, Theme.Motion.Hover)
+	end)
+	cleanup:connect(row.MouseLeave, function()
+		Animations.tween(row, { BackgroundTransparency = 1 }, Theme.Motion.Hover)
+	end)
+	cleanup:connect(row.Activated, function()
+		self:SetAutoCensorUser(not self:GetAccountPresentation().censored)
+	end)
+	self.optionsPopup = self.popups:open({ content = menu, anchor = self.optionsButton, align = "right",
+		onClose = function()
+			self.optionsPopup = nil
+			cleanup:clean()
+		end })
+end
+
+function Window:GetAccountPresentation()
+	return Account.presentation(self)
+end
+
+-- Immediately delivers current presentation; returns an unsubscribe function.
+function Window:ObserveAccount(fn)
+	assert(type(fn) == "function", "ObserveAccount requires a callback")
+	return Account.observe(self, fn)
+end
+
+function Window:SetAutoCensorUser(enabled: boolean)
+	assert(type(enabled) == "boolean", "AutoCensorUser must be a boolean")
+	self.ctx.store:set("AutoCensorUser", enabled)
 end
 
 function Window:_bindInput()
@@ -828,6 +881,7 @@ function Window:GetFlag(id: string): any
 end
 
 function Window:SetFlag(id: string, value: any)
+	if id == "AutoCensorUser" then assert(type(value) == "boolean", "AutoCensorUser must be a boolean") end
 	self.ctx.store:set(id, value)
 end
 

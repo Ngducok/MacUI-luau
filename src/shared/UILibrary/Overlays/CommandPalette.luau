@@ -35,6 +35,11 @@ function CommandPalette:isOpen(): boolean
 	return self.popup ~= nil
 end
 
+function CommandPalette:refresh()
+	if self.closing then self.closing.finish() end
+	if self.session then self.session.refresh() end
+end
+
 function CommandPalette:toggle()
 	if self.popup then
 		self.popup.close()
@@ -306,6 +311,7 @@ function CommandPalette:open(initial: string?)
 		list.CanvasPosition = Vector2.zero
 		session.highlight(1)
 	end
+	session.refresh = render
 	local changed = cleanup:connect(query:GetPropertyChangedSignal("Text"), render)
 	render()
 
