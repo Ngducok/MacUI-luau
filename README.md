@@ -2,7 +2,7 @@
 
 
 # MacUI
-## - macOS / Raycast-inspired Roblox UI library 
+### macOS / Raycast-inspired Roblox UI library 
 
 ## Preview
 ### images
