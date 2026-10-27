@@ -1,7 +1,9 @@
-# Publish only the library and files needed to use, build and test it.
+# Publish the library, executor example and single-file documentation.
 /*
 !/.gitignore
 !/README.md
+!/index.html
+!/.nojekyll
 !/src/
 /src/*
 !/src/shared/
@@ -13,11 +15,3 @@
 !/examples/
 /examples/*
 !/examples/executor.luau
-!/tools/
-/tools/*
-!/tools/build.mjs
-!/tools/test.project.json
-!/tests/
-/tests/*
-!/tests/init.luau
-!/tests/bundle.test.mjs

@@ -1,0 +1,357 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="MacUI documentation: executor setup, components, window API, themes, Roblox account, notifications and persistence with Luau examples.">
+<meta name="color-scheme" content="dark">
+<title>MacUI — Documentation</title>
+<style>
+:root{color-scheme:dark;--bg:#121214;--panel:#1b1b1e;--border:#303035;--text:#f5f5f7;--secondary:#b2b2b8;--muted:#96969e;--link:#a4c6ff}
+*{box-sizing:border-box}html{scroll-padding-top:92px}body{margin:0;background:var(--bg);color:var(--text);font:15px/1.75 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+a{color:var(--link);text-underline-offset:4px}a:hover{color:var(--text)}:focus-visible{outline:2px solid var(--link);outline-offset:5px;border-radius:3px}
+.skip{position:fixed;top:-60px;left:16px;z-index:5;padding:10px 16px;background:var(--panel)}.skip:focus{top:10px}
+header{height:68px;position:sticky;top:0;z-index:3;border-bottom:1px solid var(--border);background:var(--bg)}.header-inner{height:100%;max-width:1260px;margin:auto;padding:0 30px;display:flex;align-items:center;justify-content:space-between;gap:20px}
+.brand{display:flex;gap:18px;align-items:baseline;color:var(--text);text-decoration:none;font-size:19px;font-weight:650;letter-spacing:-.5px}.brand span{color:var(--muted);font-size:13px;font-weight:400;letter-spacing:0}.github{color:var(--secondary);font-size:13px;text-decoration:none}
+.shell{max-width:1260px;margin:auto;display:grid;grid-template-columns:225px minmax(0,1fr);gap:58px;padding:0 30px}aside{position:sticky;top:68px;height:calc(100dvh - 68px);overflow:auto;padding:34px 14px 34px 0;border-right:1px solid var(--border)}.nav-label{color:var(--muted);font-size:12px;margin:0 0 8px 10px}
+nav a{display:block;padding:5px 10px;margin:2px 0;border-radius:6px;color:var(--secondary);text-decoration:none;font-size:13px}nav a:hover,nav a:focus-visible{background:var(--panel);color:var(--text)}main{min-width:0;padding:54px 0 70px}
+.intro{padding-bottom:38px}.version{color:var(--muted);font:12px ui-monospace,SFMono-Regular,Consolas,monospace}h1{font-size:44px;letter-spacing:-1.6px;line-height:1.12;font-weight:650;margin:12px 0 20px}.lead{color:var(--secondary);font-size:18px;line-height:1.65;max-width:650px;margin:0 0 22px}.intro-links{display:flex;flex-wrap:wrap;gap:12px 26px;font-size:13px}
+section{border-top:1px solid var(--border);padding:36px 0 14px}section:target>h2{color:var(--link)}h2{font-size:25px;line-height:1.35;font-weight:600;letter-spacing:-.5px;margin:0 0 18px}h3{font-size:17px;line-height:1.5;font-weight:600;margin:28px 0 10px}p{margin:10px 0 16px;color:var(--secondary)}strong{color:var(--text);font-weight:600}ul,ol{padding-left:22px;color:var(--secondary)}li{margin:7px 0}
+code,kbd{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:.86em}:not(pre)>code{color:#e1e1e6;background:var(--panel);border-radius:4px;padding:2px 5px;overflow-wrap:anywhere}kbd{display:inline-block;padding:1px 6px;color:var(--text);background:var(--panel);border:1px solid #424249;border-bottom-width:2px;border-radius:4px;line-height:1.65}
+pre{position:relative;margin:18px 0 22px;border:1px solid var(--border);border-radius:9px;background:#19191c;padding:42px 20px 20px;overflow:auto;tab-size:4;line-height:1.7}pre code{display:block;width:max-content;min-width:100%;font-size:12px;color:#dddde4}pre button{position:absolute;right:10px;top:8px;padding:4px 10px;border:1px solid #424249;border-radius:5px;background:#242428;color:var(--secondary);font:inherit;font-size:12px;cursor:pointer}pre button:hover{color:var(--text);border-color:var(--muted)}
+.table-wrap{overflow:auto;margin:18px 0 24px}table{width:100%;border-collapse:collapse;font-size:13px;text-align:left}th{font-weight:500;color:var(--text);background:var(--panel)}th,td{padding:11px 13px;border-bottom:1px solid var(--border);vertical-align:top}td{color:var(--secondary)}td:first-child{min-width:140px}
+.note{border-left:2px solid #737380;padding:2px 0 2px 17px;margin:22px 0}.note p{margin:7px 0;font-size:13px}.signature{color:var(--text);font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:13px;overflow-wrap:anywhere}footer{border-top:1px solid var(--border);margin-top:28px;padding-top:22px;color:var(--muted);font-size:12px}.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap;border:0}
+@media(max-width:850px){.header-inner{padding:0 20px}.shell{display:block;padding:0 20px}aside{top:68px;height:auto;padding:9px 0;border-right:0;border-bottom:1px solid var(--border);background:var(--bg);z-index:2;overflow:visible}.nav-label{display:none}nav{display:flex;gap:3px;overflow:auto;scrollbar-width:thin;padding:3px}nav a{white-space:nowrap;padding:7px 9px}main{padding-top:34px}html{scroll-padding-top:146px}h1{font-size:36px}.lead{font-size:16px}h2{font-size:23px}pre{padding-left:14px;padding-right:14px}}
+@media print{header,aside,.skip,pre button{display:none}.shell{display:block;max-width:none;padding:0}main{padding:0}body{background:white;color:black}p,li,td,strong,h1,h2,h3,pre code,.signature{color:black}pre,th,:not(pre)>code{background:#f3f3f3;color:black}pre{white-space:pre-wrap}pre code{width:auto}h2,h3{break-after:avoid}}
+</style>
+</head>
+<body>
+<a class="skip" href="#main">Skip to documentation</a>
+<header><div class="header-inner"><a class="brand" href="#main">MacUI <span>Documentation</span></a><a class="github" href="https://github.com/Ngducok/MacUI-luau">GitHub repository</a></div></header>
+<div class="shell">
+<aside><p class="nav-label">On this page</p><nav aria-label="Documentation sections">
+<a href="#start">Quick start</a><a href="#installation">Installation</a><a href="#window-options">Window options</a><a href="#structure">Pages, sections &amp; cards</a><a href="#controls">Controls</a><a href="#window-api">Window API</a><a href="#account">Account profile</a><a href="#notifications">Notifications &amp; dialogs</a><a href="#search">Search &amp; palette</a><a href="#themes">Themes &amp; typography</a><a href="#icons">Icons</a><a href="#animation">Animated images</a><a href="#flags">Flags &amp; configuration</a><a href="#persistence">Persistence</a><a href="#lifecycle">Lifecycle</a><a href="#troubleshooting">Troubleshooting</a>
+</nav></aside>
+<main id="main">
+<div class="intro"><span class="version">v1.0.0 · Luau / Roblox</span><h1>MacUI</h1><p class="lead">A compact Roblox UI library with macOS window controls, Raycast-style navigation, acrylic surfaces and native GUI components.</p><p>One API for executors and normal LocalScripts. This page contains setup, component options, API reference and practical Luau examples.</p><div class="intro-links"><a href="#start">Create your first window</a><a href="https://github.com/Ngducok/MacUI-luau/blob/main/examples/executor.luau">View example</a><a href="https://raw.githubusercontent.com/Ngducok/MacUI-luau/main/dist/MacUI.luau">Executor bundle</a></div></div>
+
+<section id="start"><h2>Quick start</h2><p>Run this in an executor while connected to a Roblox experience. It creates a window, a page and three controls. The sidebar account row appears automatically.</p>
+<pre><code class="language-luau">local MacUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Ngducok/MacUI-luau/main/dist/MacUI.luau"))()
+
+local Window = MacUI:CreateWindow({
+    Size = UDim2.fromOffset(860, 520),
+    ToggleKey = Enum.KeyCode.RightShift,
+})
+local General = Window:AddPage({ Id = "general", Title = "General", Icon = "gear" })
+local Appearance = General:AddSection({ Title = "Appearance" })
+local Card = Appearance:AddCard({
+    Id = "interface", Title = "Interface", Description = "Customize this session.",
+    Icon = "paint-brush",
+})
+Card:AddToggle({
+    Id = "reduce-motion", Title = "Reduce motion", Default = false,
+    Callback = function(value) Window:SetReducedMotion(value) end,
+})
+Card:AddDropdown({
+    Id = "theme", Title = "Theme", Options = { "Dark", "Light" }, Default = "Dark",
+    Callback = function(value) Window:SetTheme(value) end,
+})
+Card:AddButton({
+    Title = "Show notification",
+    Callback = function()
+        Window:Notify({ Title = "MacUI", Content = "Ready to use.", Kind = "success" })
+    end,
+})</code></pre>
+<p><kbd>Right Shift</kbd> shows/hides the window. <kbd>Ctrl</kbd> + <kbd>K</kbd> opens the palette. Red hides the window, yellow minimizes, and green toggles maximization.</p><p>To run the repository example directly:</p>
+<pre><code class="language-luau">loadstring(game:HttpGet("https://raw.githubusercontent.com/Ngducok/MacUI-luau/main/examples/executor.luau"))()</code></pre></section>
+
+<section id="installation"><h2>Installation</h2><h3>Executor</h3><p>Requires <code>loadstring</code>, <code>game:HttpGet</code> and current Roblox GUI APIs. <code>dist/MacUI.luau</code> includes every library module; it does not download additional modules.</p><p>When creating a window, the bundle tries <code>gethui()</code>. If absent, failing or returning something other than an Instance, MacUI uses <code>LocalPlayer.PlayerGui</code>. An explicit Parent takes precedence. No files are written unless your persistence adapter writes them.</p><p>The <code>main</code> raw URL follows updates. To pin a version, replace main with a full commit SHA.</p>
+<h3>Roblox Studio</h3><ol><li>Import <code>src/shared/UILibrary</code> as a ModuleScript with its child folders and ModuleScripts.</li><li>Place it in ReplicatedStorage; rename the root ModuleScript to <code>MacUI</code> if desired.</li><li>Require it from a <strong>LocalScript</strong> and use the same API.</li></ol>
+<pre><code class="language-luau">local MacUI = require(game:GetService("ReplicatedStorage"):WaitForChild("MacUI"))
+local Window = MacUI:CreateWindow()
+local Page = Window:AddPage({ Id = "home", Title = "Home", Icon = "house" })
+Page:AddSection({ Title = "Status" }):AddCard({ Title = "Welcome" })</code></pre>
+<p>Studio source uses native Roblox APIs, without executor functions. For Rojo, map <code>src/shared/UILibrary</code> to your chosen ModuleScript location.</p>
+<h3>Repository files</h3><div class="table-wrap"><table><thead><tr><th>Path</th><th>Purpose</th></tr></thead><tbody><tr><td><code>dist/MacUI.luau</code></td><td>Ready-to-load executor bundle.</td></tr><tr><td><code>examples/executor.luau</code></td><td>Small runnable example.</td></tr><tr><td><code>src/shared/UILibrary</code></td><td>Modular source for Studio/customization.</td></tr><tr><td><code>index.html</code></td><td>All documentation, styles and copy-button behavior in one file.</td></tr></tbody></table></div></section>
+
+<section id="window-options"><h2>Window options</h2><p class="signature">MacUI:CreateWindow(options?) → Window</p><p>Omit options for defaults. <code>MacUI.Name</code> is <code>"MacUI"</code>; <code>MacUI.Version</code> is <code>"1.0.0"</code>.</p>
+<div class="table-wrap"><table><thead><tr><th>Option</th><th>Default</th><th>Behavior</th></tr></thead><tbody>
+<tr><td><code>Size</code></td><td><code>UDim2.fromOffset(860, 520)</code></td><td>Initial size. Use pixel offsets; scale components are not used as requested dimensions.</td></tr>
+<tr><td><code>MinSize</code></td><td><code>Vector2.new(720, 440)</code></td><td>Resize minimum; viewport fitting may reduce layout further on small screens.</td></tr>
+<tr><td><code>ToggleKey</code></td><td><code>Enum.KeyCode.RightShift</code></td><td>Show/hide shortcut.</td></tr>
+<tr><td><code>Resizable</code>, <code>Draggable</code>, <code>Maximizable</code></td><td><code>true</code></td><td>Enable resize handle, dragging and zoom control.</td></tr>
+<tr><td><code>Scale</code></td><td><code>1</code></td><td>Explicit scale, clamped to 0.6–1.5. Keep 1 for desktop clarity.</td></tr>
+<tr><td><code>AutoScale</code></td><td><code>true</code></td><td>Fit through layout resizing, then at most 5% automatic downscaling. False uses explicit Scale. Both modes constrain the window to the viewport.</td></tr>
+<tr><td><code>Theme</code></td><td><code>"Dark"</code></td><td>Dark, Light or a registered theme. Shared within the loaded library.</td></tr>
+<tr><td><code>ReducedMotion</code></td><td><code>false</code> initially</td><td>Skip tweens and pause sprite advancement. Shared within the loaded library.</td></tr>
+<tr><td><code>Acrylic</code></td><td><code>true</code></td><td>Translucent surface. False uses an opaque background.</td></tr>
+<tr><td><code>BackgroundTransparency</code></td><td><code>0.1</code></td><td>Clamped to 0–1.</td></tr>
+<tr><td><code>BlurEnabled</code></td><td><code>true</code></td><td>Blur the 3D world while visible.</td></tr>
+<tr><td><code>BlurSize</code></td><td><code>14</code></td><td>Strength, clamped to 0–56.</td></tr>
+<tr><td><code>BlurTweenTime</code></td><td><code>0.18</code></td><td>Transition time in seconds.</td></tr>
+<tr><td><code>SearchPlaceholder</code></td><td><code>"Search features..."</code></td><td>Sidebar search placeholder.</td></tr>
+<tr><td><code>PalettePreserveQuery</code></td><td><code>false</code></td><td>Retain palette query between opens.</td></tr>
+<tr><td><code>Account</code></td><td><code>{ Enabled = true }</code></td><td>Disable built-in Account navigation with Enabled false.</td></tr>
+<tr><td><code>Persistence</code></td><td>None</td><td>Load/Save adapter; <a href="#persistence">see persistence</a>.</td></tr>
+<tr><td><code>Parent</code></td><td>Runtime-dependent</td><td>Executor: valid gethui result, otherwise PlayerGui. Studio: LocalPlayer.PlayerGui. Explicit Instance overrides both.</td></tr>
+<tr><td><code>DisplayOrder</code></td><td><code>50</code></td><td>ScreenGui DisplayOrder.</td></tr>
+<tr><td><code>Title</code>, <code>Subtitle</code>, <code>Icon</code>, <code>AnimatedIcon</code></td><td>Legacy options</td><td>Accepted for compatibility; cannot replace account name/subtitle/avatar. Page/card titles and icons work normally.</td></tr>
+</tbody></table></div><p>Blur uses Lighting.BlurEffect; Roblox has no per-window backdrop blur. Visible windows share one effect with the largest requested size. Hiding the last window releases blur; destroying the last removes the library effect. A pre-existing <code>UILibraryBlur</code> effect is restored instead of deleted.</p></section>
+
+<section id="structure"><h2>Pages, sections &amp; cards</h2><p>Hierarchy: <strong>Window / Page / Section / Card / Controls</strong>. Use stable IDs for navigation and saved values.</p>
+<pre><code class="language-luau">local Settings = Window:AddPage({
+    Id = "settings", Title = "Settings", Description = "Session preferences",
+    Icon = "gear", Badge = "NEW", Group = 2,
+    Keywords = "preferences appearance", Aliases = { "options" },
+})
+local Section = Settings:AddSection({ Title = "General", Description = "Basic preferences" })
+local Card = Section:AddCard({
+    Id = "options", Title = "Options", Description = "Change session behavior.",
+    Icon = "three-sliders-horizontal", Collapsible = true, DefaultExpanded = true,
+    Toggle = true, Default = false,
+    Callback = function(enabled) print("Card enabled:", enabled) end,
+})</code></pre>
+<h3>Page</h3><p class="signature">Window:AddPage({ Id, Title, Description, Icon, Badge, Group, Keywords, Aliases, Build, Sidebar })</p><p>Title is required. Id defaults to lowercase Title; duplicate IDs are rejected. Different Group values add sidebar gaps. <code>Sidebar = false</code> creates a page without a navigation row or initial selection. The first normal page opens automatically.</p><p>Build creates content lazily once, on first open or when search builds the registry:</p>
+<pre><code class="language-luau">Window:AddPage({
+    Id = "advanced", Title = "Advanced", Icon = "gear",
+    Build = function(page)
+        page:AddSection({ Title = "Advanced settings" }):AddCard({ Title = "Diagnostics" })
+    end,
+})
+Window:SelectPage("advanced")</code></pre><p>Methods: <code>AddSection(options)</code>, <code>GetSections()</code>, <code>EnsureBuilt()</code>, <code>SetTitle(text)</code>, <code>SetBadge(text?)</code>, <code>Destroy()</code>.</p>
+<h3>Section</h3><p class="signature">Page:AddSection({ Title, Description, Layout, Columns })</p><p><code>Layout = "List"</code> is the default: grouped rows with dividers. <code>Layout = "Grid"</code> creates tiles that open controls in an inspector. Without Columns, grid layout chooses 1–3 columns from available width; an explicit Columns value fixes the count.</p>
+<pre><code class="language-luau">local Grid = Settings:AddSection({ Title = "Tools", Layout = "Grid", Columns = 3 })
+Grid:AddCard({ Id = "diagnostics", Title = "Diagnostics", Icon = "gear" })</code></pre><p>Methods: <code>AddCard(options)</code>, <code>GetCards()</code>, <code>SetVisible(bool)</code>, <code>Destroy()</code>.</p>
+<h3>Card</h3><p class="signature">Section:AddCard({ Id, Title, Description, Icon, AnimatedIcon, Badge, Toggle, Default, Callback, Collapsible, DefaultExpanded, Keywords, Aliases, Searchable })</p><p>Toggle true adds a header switch; with a supplied Id its flag is <code>&lt;Id&gt;.enabled</code>. Collapsible enables folding; DefaultExpanded controls its starting state. Height follows content automatically.</p>
+<div class="table-wrap"><table><thead><tr><th>Method</th><th>Purpose</th></tr></thead><tbody>
+<tr><td><code>SetExpanded(bool, instant?)</code>, <code>IsExpanded()</code></td><td>Change/read expansion.</td></tr><tr><td><code>GetEnabled()</code>, <code>SetEnabled(bool)</code></td><td>Read/write optional header switch.</td></tr><tr><td><code>SetTitle(text)</code>, <code>SetDescription(text?)</code></td><td>Update content and search metadata.</td></tr><tr><td><code>SetBadge(text?, kind?)</code>, <code>SetLoading(bool)</code></td><td>Change badge or spinner.</td></tr><tr><td><code>SetVisible(bool)</code>, <code>SetDisabled(bool)</code></td><td>Hide or disable controls.</td></tr><tr><td><code>AddAction({ Icon, Text, Tooltip, Callback })</code></td><td>Header action; provide Icon or Text.</td></tr><tr><td><code>Focus()</code>, <code>Flash()</code></td><td>Navigate to card or highlight it.</td></tr><tr><td><code>GetControls()</code>, <code>Destroy()</code></td><td>Read a copy of the control list or remove card.</td></tr></tbody></table></div></section>
+
+<section id="controls"><h2>Controls</h2><p>Create controls through Card. Common options: <code>Id</code>, <code>Title</code>, <code>Description</code>, <code>Callback</code>, <code>Keywords</code>, <code>Aliases</code>, <code>Searchable</code>.</p><p>Value controls expose <code>GetValue()</code>, <code>SetValue(value)</code>, <code>SetDisabled(bool)</code>, <code>SetVisible(bool)</code>, <code>SetTitle(text)</code>, <code>SetDescription(text?)</code>, <code>Destroy()</code>. Display-only elements expose relevant operations. Callbacks run inside protected calls when the stored value changes.</p>
+<h3>Toggle</h3><pre><code class="language-luau">local Enabled = Card:AddToggle({
+    Id = "enabled", Title = "Enabled", Default = false,
+    Callback = function(value) print(value) end,
+})
+Enabled:SetValue(true)</code></pre><p>Default is boolean. Optional OnColor/OffColor customize colors.</p>
+<h3>Slider</h3><pre><code class="language-luau">local Volume = Card:AddSlider({
+    Id = "volume", Title = "Volume", Min = 0, Max = 100,
+    Default = 50, Step = 1, Suffix = "%",
+    Callback = function(value) print("Volume:", value) end,
+})
+Volume:SetValue(75)</code></pre><p>Values snap to Step and clamp to Min/Max. Color customizes the filled track.</p>
+<h3>Dropdown</h3><pre><code class="language-luau">local Quality = Card:AddDropdown({
+    Id = "quality", Title = "Quality", Width = 160, Searchable = true,
+    Options = { { Label = "Low", Value = 1 }, { Label = "High", Value = 2 } },
+    Default = 2, Callback = function(value) print(value) end,
+})
+Quality:SetOptions({ { Label = "Balanced", Value = 3 } })
+Quality:SetValue(3)
+Card:AddDropdown({
+    Id = "tags", Title = "Tags", Multi = true,
+    Options = { "One", "Two", "Three" }, Default = { "One" },
+    Callback = function(values) print(table.concat(values, ", ")) end,
+})</code></pre><p>Options accept strings or Label/Value records. Multi returns an array. Methods: <code>SetOptions(list, keepValue?)</code>, <code>GetOptions()</code>, <code>Open()</code>, <code>Close()</code>. Searchable true also enables the dropdown's own search; lists with over 10 items enable it automatically.</p>
+<h3>Button</h3><pre><code class="language-luau">Card:AddButton({
+    Title = "Apply", Variant = "Primary", Icon = "check-small",
+    Callback = function() print("Applied") end,
+})
+Card:AddButton({
+    Label = "Configuration", Title = "Reset", Variant = "Destructive",
+    Callback = function() print("Reset requested") end,
+})</code></pre><p>Variants: Primary, Secondary, Ghost, Destructive. Label puts the button on the right of a titled row. Buttons are actions with no stored value. <code>SetText(text)</code> changes the button label.</p>
+<h3>Input</h3><pre><code class="language-luau">local Name = Card:AddInput({
+    Id = "preset-name", Title = "Preset name", Default = "Default",
+    Placeholder = "Enter a name", Width = 190, Clearable = true,
+    Validate = function(text)
+        if #text &gt; 40 then return "Use 40 bytes or fewer" end
+        return true
+    end,
+    Callback = function(text) print("Changed:", text) end,
+    OnSubmit = function(text) print("Submitted:", text) end,
+})
+Name:Focus()</code></pre><p>Default: commit on blur or Enter. SubmitOnEnter true requires Enter; Live true commits as typed. Validate accepts true/nil or returns an error string. It validates interactive edits; validate programmatic values before SetValue/ImportConfig.</p>
+<h3>Keybind</h3><pre><code class="language-luau">Card:AddKeybind({
+    Id = "action-key", Title = "Action key", Default = Enum.KeyCode.F,
+    Callback = function(key) print("New binding:", key.Name) end,
+    OnPress = function(key) print("Pressed:", key.Name) end,
+})</code></pre><p>Click to capture. Escape cancels; Backspace/Delete clears to Enum.KeyCode.Unknown. The window toggle key is reserved. Callback handles rebinding; OnPress handles activation.</p>
+<h3>Color picker</h3><pre><code class="language-luau">local Tint = Card:AddColorPicker({
+    Id = "tint", Title = "Tint", Default = Color3.fromRGB(140, 170, 255),
+    Transparency = 0.2,
+    Callback = function(color, transparency) print(color:ToHex(), transparency) end,
+})
+Tint:SetTransparency(0.4)
+print(Tint:GetTransparency())</code></pre><p>Passing Transparency enables opacity controls. GetValue returns Color3; GetTransparency/SetTransparency access transparency separately.</p>
+<h3>Label, paragraph, divider, status, progress</h3><pre><code class="language-luau">Card:AddLabel({ Title = "Version", Value = MacUI.Version })
+Card:AddParagraph({ Title = "About", Content = "A longer explanation that wraps naturally." })
+Card:AddDivider({})
+local Status = Card:AddStatus({ Title = "Connection", Value = "Ready", Kind = "Success" })
+Status:SetValue("Waiting", "Warning")
+local Progress = Card:AddProgress({ Title = "Download", Value = 0.5 })
+Progress:SetValue(0.8)
+Progress:SetValue(nil) -- Indeterminate.</code></pre><p>Status kinds: Neutral, Success, Warning, Danger, Accent. Progress accepts 0–1, or nil for indeterminate animation.</p>
+<h3>Image</h3><pre><code class="language-luau">Card:AddImage({
+    Title = "Preview", Image = "rbxassetid://YOUR_IMAGE_ID",
+    Height = 140, ScaleType = Enum.ScaleType.Fit,
+})</code></pre><p>Use a Roblox image content URL. Sprite sheets use AddAnimatedImage; see <a href="#animation">Animated images</a>.</p></section>
+
+<section id="window-api"><h2>Window API</h2><div class="table-wrap"><table><thead><tr><th>Method</th><th>Behavior</th></tr></thead><tbody>
+<tr><td><code>Show()</code>, <code>Hide()</code>, <code>Toggle()</code>, <code>IsVisible()</code></td><td>Control/read visibility. Hide preserves values.</td></tr>
+<tr><td><code>SetMinimized(bool)</code>, <code>SetMaximized(bool)</code></td><td>Change window state.</td></tr>
+<tr><td><code>SetToggleKey(KeyCode)</code>, <code>SetScale(number)</code></td><td>Change shortcut or explicit scale.</td></tr>
+<tr><td><code>SetTheme(name)</code>, <code>SetReducedMotion(bool)</code></td><td>Shared appearance/motion settings.</td></tr>
+<tr><td><code>AddPage(options)</code>, <code>GetPage(id)</code>, <code>SelectPage(id)</code></td><td>Create, look up or navigate to a page.</td></tr>
+<tr><td><code>Back()</code>, <code>Forward()</code></td><td>Page history; contents and scroll position survive navigation.</td></tr>
+<tr><td><code>OpenCommandPalette(query?)</code></td><td>Open search. Explicit query overrides a preserved query.</td></tr>
+<tr><td><code>AddHeaderAction({ Icon, Tooltip, Callback })</code></td><td>Header action.</td></tr>
+<tr><td><code>Notify(options)</code></td><td>Show toast; returns a close function.</td></tr>
+<tr><td><code>Confirm(options)</code></td><td>Show confirmation; returns popup object.</td></tr>
+<tr><td><code>GetFlag(id)</code>, <code>SetFlag(id, value)</code>, <code>OnFlagChanged(id, fn)</code></td><td>Read/write/observe state.</td></tr>
+<tr><td><code>ExportConfig()</code>, <code>ImportConfig(table)</code></td><td>Export encoded state or import compatible existing flags.</td></tr>
+<tr><td><code>SetTitle(title?, subtitle?)</code></td><td>Legacy method; preserves real account identity rather than applying aliases.</td></tr>
+<tr><td><code>Destroy()</code></td><td>Release instances, handlers, blur ownership and resources; safe to call again.</td></tr>
+</tbody></table></div><p>Library methods: <code>MacUI:SetTheme(name)</code>, <code>MacUI:RegisterTheme(name, tokens)</code>, <code>MacUI:SetReducedMotion(bool)</code>. Advanced exports: <code>MacUI.Theme</code>, <code>MacUI.Icons</code>, <code>MacUI.AnimatedImage</code>.</p></section>
+
+<section id="account"><h2>Account profile</h2><p>MacUI resolves Players.LocalPlayer when each window is created, not during module initialization. Sidebar and Account share one identity record.</p><div class="table-wrap"><table><thead><tr><th>Element</th><th>Source</th></tr></thead><tbody>
+<tr><td>Sidebar title / Account heading</td><td><code>LocalPlayer.Name</code></td></tr><tr><td>Sidebar subtitle</td><td><code>"Account"</code></td></tr><tr><td>Header identifier / Username row</td><td><code>"@" .. LocalPlayer.Name</code></td></tr><tr><td>Display name</td><td><code>LocalPlayer.DisplayName</code></td></tr><tr><td>User ID</td><td><code>LocalPlayer.UserId</code></td></tr><tr><td>Avatar</td><td><code>GetUserThumbnailAsync(UserId, HeadShot, Size420x420)</code></td></tr>
+</tbody></table></div><p>Portrait loads asynchronously once per window. Failure/not-ready keeps a neutral person icon. Without a local player, details are marked unavailable. Legacy custom names/icons cannot replace actual Roblox identity.</p>
+<pre><code class="language-luau">Window:SelectPage("account")
+Window:Back()
+local OtherWindow = MacUI:CreateWindow({ Account = { Enabled = false } })</code></pre><p>Built-in Account has page ID account, one search result and no extra category row. That ID is reserved while enabled; disabling Account removes its built-in page and frees the ID.</p></section>
+
+<section id="notifications"><h2>Notifications &amp; dialogs</h2><h3>Toast notification</h3><pre><code class="language-luau">local close = Window:Notify({
+    Title = "Configuration saved", Content = "Your current values are ready.",
+    Kind = "success", Duration = 5,
+    Actions = { { Text = "Dismiss", Callback = function() print("Dismissed") end } },
+})
+-- close() -- Dismiss programmatically.</code></pre><p>Title is required. Kind: info, success, warning, error. Duration defaults to 4 seconds; 0 keeps it open. Actions contain Text and an optional Callback.</p>
+<h3>Confirmation</h3><pre><code class="language-luau">Window:Confirm({
+    Title = "Reset preferences?", Content = "This resets current session values.",
+    ConfirmText = "Reset", CancelText = "Keep", Destructive = true,
+    OnConfirm = function() print("Confirmed") end,
+    OnCancel = function() print("Cancelled") end,
+})</code></pre><p>Destructive changes confirm-button styling. OnCancel runs when cancelled or dismissed without confirmation.</p></section>
+
+<section id="search"><h2>Search &amp; command palette</h2><p>Pages, searchable cards and titled controls share one registry. Hierarchical IDs stay stable when titles change. Results show icon, destination, location and current state.</p><div class="table-wrap"><table><thead><tr><th>Input</th><th>Action</th></tr></thead><tbody><tr><td><kbd>Ctrl</kbd> + <kbd>K</kbd></td><td>Toggle palette.</td></tr><tr><td><kbd>↑</kbd> / <kbd>↓</kbd></td><td>Select result in sidebar or palette.</td></tr><tr><td><kbd>Tab</kbd> in palette</td><td>Move through results.</td></tr><tr><td><kbd>Enter</kbd></td><td>Open selected result.</td></tr><tr><td><kbd>Esc</kbd> / outside click</td><td>Close palette.</td></tr></tbody></table></div><p>A result switches page, scrolls to the card, expands it if needed and briefly highlights it. Keywords/Aliases add matching terms. Exact/prefix title matches rank first. Generic Open/Button actions are excluded unless explicitly indexed.</p>
+<pre><code class="language-luau">Card:AddButton({
+    Title = "Open", SearchTitle = "Open diagnostics", Searchable = true,
+    Keywords = "debug logs", Aliases = { "inspect" },
+    Callback = function() print("Diagnostics") end,
+})
+Window:OpenCommandPalette("diagnostics")</code></pre><p>Searchable false excludes cards/controls; useful for duplicated quick links. Pages are automatic. PalettePreserveQuery true retains queries; an explicit query passed to OpenCommandPalette overrides it. Palette stays at native scale independently of the window, with safe-inset content and a fullscreen scrim.</p></section>
+
+<section id="themes"><h2>Themes &amp; typography</h2><p>Built-in themes: Dark and Light. Custom themes may supply partial tokens; missing tokens fall back to Dark. Existing components recolor immediately.</p>
+<pre><code class="language-luau">MacUI:RegisterTheme("Midnight", {
+    Background = Color3.fromRGB(10, 12, 20), Sidebar = Color3.fromRGB(18, 20, 32),
+    Surface = Color3.fromRGB(16, 18, 28), Accent = Color3.fromRGB(140, 120, 255),
+})
+Window:SetTheme("Midnight")</code></pre><p>Color tokens: <code>Background</code> <code>Sidebar</code> <code>Surface</code> <code>SurfaceHover</code> <code>SurfaceActive</code> <code>Border</code> <code>TextPrimary</code> <code>TextSecondary</code> <code>TextMuted</code> <code>TextDisabled</code> <code>Accent</code> <code>Success</code> <code>Warning</code> <code>Danger</code> <code>Palette</code> <code>PaletteBorder</code> <code>PaletteSelected</code> <code>PaletteDivider</code> <code>PalettePlaceholder</code> <code>Knob</code> <code>OnAccent</code> <code>Scrim</code>.</p>
+<h3>Typography</h3><p>Roboto FontFace roles and integer sizes live in MacUI.Theme.Typography. Normal labels use TextScaled false. Desktop scale defaults to 1.</p><div class="table-wrap"><table><thead><tr><th>Role</th><th>Size</th><th>Weight</th></tr></thead><tbody><tr><td>WindowTitle</td><td>18</td><td>SemiBold</td></tr><tr><td>Navigation / Feature</td><td>14</td><td>Medium</td></tr><tr><td>Section</td><td>13</td><td>Medium</td></tr><tr><td>Control</td><td>13</td><td>Regular</td></tr><tr><td>Description</td><td>12</td><td>Regular</td></tr><tr><td>Hint</td><td>11</td><td>Medium</td></tr><tr><td>Search</td><td>14</td><td>Regular</td></tr></tbody></table></div><p>Dark text colors: primary (245,245,247), secondary (178,178,184), muted (143,143,151), disabled (111,111,119). Unicode strings stay intact; Roblox handles glyph fallback. Bundled Roboto has no dedicated 600 face, so SemiBold resolves to an available native weight.</p><p>Theme and reduced motion are shared within one loaded library. <code>MacUI:SetReducedMotion(true)</code> and the Window equivalent skip tweens and pause sprite advancement.</p></section>
+
+<section id="icons"><h2>Icons</h2><p>Builder Icons ships with Roblox. Use kebab-case names such as gear, house and magnifying-glass. PascalCase is normalized. Aliases include settings, search, back, close and success.</p>
+<pre><code class="language-luau">local Page = Window:AddPage({ Id = "tools", Title = "Tools", Icon = "gear" })
+local Section = Page:AddSection({ Title = "Examples" })
+Section:AddCard({
+    Title = "Colored icon",
+    Icon = { Icon = "sparkles", Color = "TextPrimary", Tile = Color3.fromRGB(195, 75, 85) },
+})
+Section:AddCard({ Title = "Custom image", Icon = "rbxassetid://YOUR_IMAGE_ID" })</code></pre><p>Records accept Icon (or Image), Color, Tile and Filled. For image tinting also use Tint true. Full aliases are in Core/Icons.luau. Account avatars always use the player's headshot.</p></section>
+
+<section id="animation"><h2>Animated images</h2><p>Roblox cannot play GIFs directly. Convert to a sprite sheet: equal-size frames in a grid, uploaded as one Roblox image.</p><ol><li>Extract GIF frames with a GIF tool or ffmpeg.</li><li>Pack into a grid; record frame dimensions and column count.</li><li>Keep the image at most 1024 × 1024 pixels to avoid upload downscaling that breaks frame offsets.</li><li>Upload and use the Roblox image ID.</li></ol>
+<pre><code class="language-luau">local Animation = Card:AddAnimatedImage({
+    Title = "Preview", Image = "rbxassetid://YOUR_SPRITE_SHEET_ID",
+    FrameSize = Vector2.new(128, 128), Columns = 4, Frames = 16,
+    FPS = 12, Loop = true, Autoplay = true, Speed = 1, Height = 128,
+})
+Animation:Pause()
+Animation:Play()</code></pre><p>Required: Image, FrameSize, Columns, Frames. Defaults: FPS 12, Speed 1, Loop true, Autoplay true. FrameSize is measured in source-image pixels. Card icons accept the same frame options through AnimatedIcon.</p><p><code>MacUI.AnimatedImage.new(options)</code> creates a standalone object with Instance, Play, Pause, SetSpeed, SetFrame, IsPlaying and Destroy methods. Frame indices are zero-based. Animations share one Heartbeat; hidden objects skip advancement, and the last destroyed animation releases the scheduler.</p></section>
+
+<section id="flags"><h2>Flags &amp; configuration</h2><p>A control with Id volume stores its value under that flag. Use unique, stable IDs for saved controls. Internal auto-generated IDs are omitted from exported configuration.</p>
+<pre><code class="language-luau">print(Window:GetFlag("volume"))
+Window:SetFlag("volume", 60)
+local unsubscribe = Window:OnFlagChanged("volume", function(value, oldValue)
+    print(oldValue, value)
+end)
+local snapshot = Window:ExportConfig()
+Window:ImportConfig(snapshot)
+unsubscribe()</code></pre><p>ExportConfig returns a JSON-safe table; Color3 and EnumItem use tagged records. ImportConfig only applies already registered flags with matching decoded Roblox types. It does not create controls/new flags.</p><div class="note"><p>Use control:SetValue for normal control normalization such as slider snapping. SetFlag writes directly to the store. Validate external configuration before importing; matching a type is not application-specific validation.</p></div><p>Value-change callbacks do not run merely because controls were created. Apply restored behavioral settings explicitly after registration:</p>
+<pre><code class="language-luau">local Theme = Card:AddDropdown({
+    Id = "appearance-theme", Title = "Theme", Options = { "Dark", "Light" }, Default = "Dark",
+    Callback = function(value) Window:SetTheme(value) end,
+})
+Window:SetTheme(Theme:GetValue())</code></pre></section>
+
+<section id="persistence"><h2>Persistence</h2><p>Defaults are session-only. Supply <code>Persistence = { Load, Save, Delay }</code> to use external storage. Load returns an encoded table, Save receives the encoded snapshot, and Delay is a save debounce in seconds (default 2).</p><h3>Executor file adapter</h3><p>Requires isfile/readfile/writefile. This optional example saves per-player JSON in the executor filesystem. Invalid JSON is reported and protected from automatic overwriting until repaired/removed.</p>
+<pre><code class="language-luau">local HttpService = game:GetService("HttpService")
+local Players = game:GetService("Players")
+assert(Players.LocalPlayer, "Run on the Roblox client")
+assert(type(isfile) == "function" and type(readfile) == "function"
+    and type(writefile) == "function", "Executor file APIs unavailable")
+local path = "MacUI-" .. Players.LocalPlayer.UserId .. ".json"
+local writable = true
+local Persistence = {
+    Delay = 2,
+    Load = function()
+        local ok, data = pcall(function()
+            if not isfile(path) then return {} end
+            return HttpService:JSONDecode(readfile(path))
+        end)
+        if not ok or type(data) ~= "table" then
+            writable = false
+            error("Cannot read valid config: " .. path)
+        end
+        return data
+    end,
+    Save = function(data)
+        assert(writable, "Repair or remove invalid config before saving")
+        writefile(path, HttpService:JSONEncode(data))
+    end,
+}
+local SavedWindow = MacUI:CreateWindow({ Persistence = Persistence })</code></pre><p>Load runs at creation; each control restores its value when registered. Saved types must match defaults. Allow the debounce time before leaving. For important data, provide an explicit backup/save path rather than relying on a pending timer.</p>
+<h3>Studio / server adapter</h3><p>The example expects remotes created by your game. Server handlers must validate client values before saving.</p>
+<pre><code class="language-luau">local Remotes = game:GetService("ReplicatedStorage"):WaitForChild("SettingsRemotes")
+local SavedWindow = MacUI:CreateWindow({
+    Persistence = {
+        Load = function() return Remotes.Load:InvokeServer() end,
+        Save = function(data) Remotes.Save:FireServer(data) end,
+        Delay = 2,
+    },
+})</code></pre><p>Load/save execute in protected calls; failures warn rather than crashing UI. MacUI supplies the adapter interface, not remotes/server DataStores.</p></section>
+
+<section id="lifecycle"><h2>Lifecycle</h2><p>Hide preserves UI and values. Destroy removes instances, handlers and blur ownership. Destroy an old window before replacing it when rerunning scripts.</p>
+<pre><code class="language-luau">Window:Hide()
+Window:Show()
+-- When no longer needed:
+Window:Destroy()</code></pre><p>Pages are built once; Back/Forward preserve contents and scroll position. Tab changes move the selection background and animate page entry. Reduced motion applies final states immediately.</p><p>Theme, motion and shared resources belong to one loaded library. Loading the bundle again creates another library instance; keep the old Window reference if it must be destroyed later.</p></section>
+
+<section id="troubleshooting"><h2>Troubleshooting</h2><h3>No window after loading</h3><p>The bundle returns the API. Call MacUI:CreateWindow and add a normal page, or run the example URL in <a href="#start">Quick start</a>.</p><h3>HTTP / loadstring error</h3><p>Check executor support and access to raw.githubusercontent.com. Use the raw URL ending in dist/MacUI.luau, not a GitHub blob page. Studio LocalScripts should require imported source.</p><h3>Missing account / avatar</h3><p>Run after LocalPlayer exists. Studio Edit mode has no LocalPlayer. Thumbnail failure/not-ready uses the neutral fallback; names still come from Roblox. Legacy Title/Icon cannot replace identity.</p><h3>Soft text / oversized UI</h3><p>Use Scale 1; change Size/MinSize instead. AutoScale fits small viewports. Text sizes are integers and TextScaled is false; Roblox/executor rendering determines final appearance.</p><h3>Blur covers the whole world</h3><p>Expected Roblox behavior. Reduce BlurSize or create the window with BlurEnabled false.</p><h3>Saved settings reset / theme not applied</h3><p>Supply persistence, stable IDs and matching default types. Wait for the save delay. Apply initial behavioral preferences after creating controls; see <a href="#flags">Flags</a>.</p><h3>Duplicate page / flag</h3><p>Use unique page IDs and avoid account while its built-in page is enabled. Use unique control flag IDs; duplicate flags emit a warning and later registrations replace the stored value.</p><h3>Executor-specific failure</h3><p>Compatibility depends on the host's supported Roblox APIs. The bundle passed Luau compilation/loader checks; that does not certify every executor. Report the exact error, executor/Roblox version and minimal reproducible script.</p></section>
+<footer>MacUI · Maintained by <a href="https://github.com/Ngducok">Ngducok</a> · <a href="https://github.com/Ngducok/MacUI-luau">Source repository</a></footer>
+</main></div>
+<div id="copy-status" class="sr-only" role="status" aria-live="polite"></div>
+<script>
+for (const block of document.querySelectorAll('pre')) {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.textContent = 'Copy';
+  button.setAttribute('aria-label', 'Copy code example');
+  block.prepend(button);
+  button.addEventListener('click', async () => {
+    const code = block.querySelector('code');
+    try {
+      await navigator.clipboard.writeText(code.textContent);
+      button.textContent = 'Copied';
+      document.getElementById('copy-status').textContent = 'Code copied to clipboard.';
+    } catch {
+      const range = document.createRange();
+      range.selectNodeContents(code);
+      const selection = window.getSelection();
+      selection.removeAllRanges();
+      selection.addRange(range);
+      button.textContent = 'Code selected';
+      document.getElementById('copy-status').textContent = 'Copy unavailable. Code selected; use your copy shortcut.';
+    }
+    setTimeout(() => { button.textContent = 'Copy'; }, 2000);
+  });
+}
+</script>
+</body>
+</html>
