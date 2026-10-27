@@ -5,6 +5,13 @@ local Window = MacUI:CreateWindow({
 	ToggleKey = Enum.KeyCode.RightShift,
 })
 
+local Player = game:GetService("Players").LocalPlayer
+local Dashboard = Window:AddPage({ Id = "dashboard", Title = "Dashboard", Icon = "house" })
+Dashboard:AddSection({ Title = "Session" }):AddCard({
+	Id = "player-profile", Title = Player.DisplayName, Description = `@{Player.Name}`,
+	Icon = "person", NavigateTo = "account",
+})
+
 local General = Window:AddPage({ Id = "general", Title = "General", Icon = "gear" })
 local Appearance = General:AddSection({ Title = "Appearance" })
 local Interface = Appearance:AddCard({

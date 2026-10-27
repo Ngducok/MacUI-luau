@@ -1,4 +1,3 @@
-local GuiService = game:GetService("GuiService")
 local UserInputService = game:GetService("UserInputService")
 
 local Input = {}
@@ -61,10 +60,9 @@ function Input.isMove(input: InputObject): boolean
 	return input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch
 end
 
--- Library ScreenGuis ignore the GUI inset; InputObject positions don't, so shift them into the same space.
+-- InputObject.Position and AbsolutePosition already use screen pixels; do not add the inset twice.
 function Input.position(input: InputObject): Vector2
-	local inset = GuiService:GetGuiInset()
-	return Vector2.new(input.Position.X, input.Position.Y) + inset
+	return Vector2.new(input.Position.X, input.Position.Y)
 end
 
 function Input.inside(gui: GuiObject, point: Vector2): boolean
@@ -92,7 +90,7 @@ function Input.drag(start: InputObject, onMove: (Vector2) -> (), onEnd: (() -> (
 		end
 	end)
 	ended = UserInputService.InputEnded:Connect(function(input)
-		if input == start or input.UserInputType == Enum.UserInputType.MouseButton1 then
+		if input == start or (start.UserInputType ~= Enum.UserInputType.Touch and input.UserInputType == Enum.UserInputType.MouseButton1) then
 			stop()
 		end
 	end)

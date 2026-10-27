@@ -77,6 +77,7 @@ function Slider.new(ctx, parent, options)
 		if self.disabled or not Input.isPointer(input) then
 			return
 		end
+		if self.stopDrag then self.stopDrag() end
 		dragging = true
 		Animations.tween(thumb, { Size = UDim2.fromOffset(16, 16) }, Theme.Motion.Hover)
 		self.stopDrag = Input.drag(input, fromPoint, function()

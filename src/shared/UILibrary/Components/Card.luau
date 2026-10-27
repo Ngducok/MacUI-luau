@@ -49,9 +49,13 @@ export type Options = {
 	Keywords: string?,
 	Aliases: (string | { string })?,
 	Searchable: boolean?,
+	NavigateTo: string?,
+	Popover: PopupManager.Policy?,
 }
 
 function Card.new(section, options: Options)
+	assert(options.NavigateTo == nil or type(options.NavigateTo) == "string", "NavigateTo must be a page ID")
+	assert(options.Popover == nil or type(options.Popover) == "table", "Popover must be a table")
 	local ctx = section.ctx
 	local grid = section.grid
 	local self = setmetatable({
@@ -148,7 +152,7 @@ function Card:_buildHeader()
 		AutomaticSize = Enum.AutomaticSize.Y,
 		BackgroundTransparency = 1,
 		LayoutOrder = 1,
-		Active = self.collapsible,
+		Active = self.collapsible or options.NavigateTo ~= nil,
 		Parent = self.Instance,
 		Theme = { BackgroundColor3 = "SurfaceHover" },
 	}, {
@@ -254,11 +258,12 @@ function Card:_buildHeader()
 		self:SetBadge(options.Badge)
 	end
 
-	if self.collapsible then
-		local chevron = Icons.create(if grid then "chevron-small-right" else "chevron-small-down", 18, {
+	if self.collapsible or options.NavigateTo then
+		local chevron = Icons.create(if options.NavigateTo then { Icon = "chevron-small-right", Color = Color3.fromRGB(165, 165, 170) }
+			else if grid then "chevron-small-right" else "chevron-small-down", if options.NavigateTo then 16 else 18, {
 			Name = "Chevron",
 			LayoutOrder = 10,
-			Rotation = if self.expanded or grid then 0 else -90,
+			Rotation = if options.NavigateTo or self.expanded or grid then 0 else -90,
 			Parent = self.actions,
 		})
 		self.chevron = chevron
@@ -277,7 +282,11 @@ function Card:_buildHeader()
 		end)
 		self.cleanup:connect(header.Activated, function()
 			if not self.disabled then
-				self:SetExpanded(not self:IsExpanded())
+				if options.NavigateTo then
+					self.section.page.window:SelectPage(options.NavigateTo)
+				else
+					self:SetExpanded(not self:IsExpanded())
+				end
 			end
 		end)
 	end
@@ -456,7 +465,12 @@ function Card:_openInspector()
 		content = surface,
 		anchor = self.Instance,
 		gap = 8,
+		group = "feature",
+		policy = self.options.Popover,
 		onClose = function()
+			for _, control in self.controls do
+				if control.stopDrag then control.stopDrag() end
+			end
 			local empty = content:FindFirstChild("Empty")
 			if empty then
 				empty:Destroy()

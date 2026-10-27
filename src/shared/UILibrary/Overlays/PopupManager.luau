@@ -10,6 +10,14 @@ local MARGIN = 8
 local PopupManager = {}
 PopupManager.__index = PopupManager
 
+export type Policy = {
+	OpenOn: "Click"?,
+	CloseOnOutsideClick: boolean?,
+	CloseOnEscape: boolean?,
+	CloseOnMouseLeave: false?,
+	CloseOnInteraction: false?,
+}
+
 export type Options = {
 	content: GuiObject,
 	anchor: GuiObject?,
@@ -25,6 +33,10 @@ export type Options = {
 	scale: number?,
 	place: ((any) -> ())?,
 	onClosing: ((() -> ()) -> ())?,
+	owner: any?,
+	group: string?,
+	regions: { GuiObject }?,
+	policy: Policy?,
 }
 
 function PopupManager.new(gui: ScreenGui)
@@ -56,7 +68,7 @@ function PopupManager:_input(input: InputObject): boolean
 	end
 
 	if input.KeyCode == Enum.KeyCode.Escape then
-		if top.dismissible then
+		if top.closeOnEscape then
 			top.close()
 		end
 		return true
@@ -64,12 +76,20 @@ function PopupManager:_input(input: InputObject): boolean
 
 	if Input.isPointer(input) then
 		local point = Input.position(input)
-		for i = #self.stack, 1, -1 do
-			local popup = self.stack[i]
-			if popup.modal or Input.inside(popup.frame, point) or (popup.anchor and Input.inside(popup.anchor, point)) then
+		-- Use the stack at InputBegan; callbacks may open/close overlays during this input.
+		local stack = table.clone(self.stack)
+		for i = #stack, 1, -1 do
+			local popup = stack[i]
+			if not popup.open then continue end
+			local inside = Input.inside(popup.frame, point) or (popup.anchor and Input.inside(popup.anchor, point))
+			for _, region in popup.regions do
+				inside = inside or (region.Parent ~= nil and Input.inside(region, point))
+			end
+			if inside or not popup.closeOnOutsideClick then
 				break
 			end
 			popup.close()
+			if popup.modal then break end
 		end
 	end
 	return false
@@ -104,6 +124,28 @@ function PopupManager:_place(popup)
 end
 
 function PopupManager:open(options: Options)
+	local policy = options.policy or {}
+	-- ponytail: feature popovers are click-only; hover/interaction dismissal needs a separate policy.
+	assert(policy.OpenOn == nil or policy.OpenOn == "Click", "Popover.OpenOn must be Click")
+	assert(policy.CloseOnMouseLeave == nil or policy.CloseOnMouseLeave == false, "Popovers stay open on mouse leave")
+	assert(policy.CloseOnInteraction == nil or policy.CloseOnInteraction == false, "Popovers stay open during interaction")
+	for _, key in { "CloseOnOutsideClick", "CloseOnEscape" } do
+		assert(policy[key] == nil or type(policy[key]) == "boolean", `Popover.{key} must be a boolean`)
+	end
+	local owner = options.owner
+	if not owner and options.anchor then
+		for i = #self.stack, 1, -1 do
+			if options.anchor:IsDescendantOf(self.stack[i].frame) then
+				owner = self.stack[i]
+				break
+			end
+		end
+	end
+	if options.group then
+		for _, existing in table.clone(self.stack) do
+			if existing.group == options.group then existing.close() end
+		end
+	end
 	local cleanup = Cleanup.new()
 	local frame = options.content
 	local popup = {
@@ -115,6 +157,11 @@ function PopupManager:open(options: Options)
 		gap = options.gap,
 		modal = options.modal == true,
 		dismissible = options.dismissible ~= false,
+		closeOnOutsideClick = options.dismissible ~= false and policy.CloseOnOutsideClick ~= false,
+		closeOnEscape = options.dismissible ~= false and policy.CloseOnEscape ~= false,
+		owner = owner,
+		group = options.group,
+		regions = options.regions or {},
 		open = true,
 	}
 
@@ -129,11 +176,7 @@ function PopupManager:open(options: Options)
 			Theme = { BackgroundColor3 = "Scrim" },
 		}))
 		Animations.tween(options.backdrop or scrim, { BackgroundTransparency = 0.55 }, Theme.Motion.Popup)
-		cleanup:connect(scrim.Activated, function()
-			if popup.dismissible then
-				popup.close()
-			end
-		end)
+		-- Dismiss only on InputBegan through the manager, never on a drag's release.
 		parent = scrim
 	end
 
@@ -159,11 +202,6 @@ function PopupManager:open(options: Options)
 	cleanup:connect(layer:GetPropertyChangedSignal("AbsoluteSize"), place)
 	if popup.anchor then
 		cleanup:connect(popup.anchor:GetPropertyChangedSignal("AbsolutePosition"), place)
-		cleanup:connect(popup.anchor.AncestryChanged, function()
-			if not popup.anchor:IsDescendantOf(game) then
-				popup.close()
-			end
-		end)
 	end
 	place()
 	if not popup.fixedScale then
@@ -175,6 +213,9 @@ function PopupManager:open(options: Options)
 			return
 		end
 		popup.open = false
+		for _, child in table.clone(self.stack) do
+			if child.owner == popup then child.close() end
+		end
 		local index = table.find(self.stack, popup)
 		if index then
 			table.remove(self.stack, index)
@@ -195,6 +236,29 @@ function PopupManager:open(options: Options)
 	end
 
 	table.insert(self.stack, popup)
+	if popup.anchor then
+		local function checkAnchor()
+			local node = popup.anchor
+			while node do
+				if (node:IsA("GuiObject") and not node.Visible) or (node:IsA("ScreenGui") and not node.Enabled) then
+					popup.close()
+					return
+				end
+				node = node.Parent
+			end
+			if not popup.anchor:IsDescendantOf(game) then popup.close() end
+		end
+		cleanup:connect(popup.anchor.AncestryChanged, checkAnchor)
+		local node = popup.anchor
+		while node do
+			if node:IsA("GuiObject") then
+				cleanup:connect(node:GetPropertyChangedSignal("Visible"), checkAnchor)
+			elseif node:IsA("ScreenGui") then
+				cleanup:connect(node:GetPropertyChangedSignal("Enabled"), checkAnchor)
+			end
+			node = node.Parent
+		end
+	end
 	return popup
 end
 
@@ -209,7 +273,8 @@ end
 
 function PopupManager:closeAll()
 	for i = #self.stack, 1, -1 do
-		self.stack[i].close()
+		local popup = self.stack[i]
+		if popup then popup.close() end
 	end
 end
 
