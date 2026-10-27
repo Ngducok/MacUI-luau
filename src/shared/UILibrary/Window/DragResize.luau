@@ -2,24 +2,89 @@ local Core = script.Parent.Parent.Core
 local Factory = require(Core.Factory)
 local Input = require(Core.Input)
 local Icons = require(Core.Icons)
+local UserInputService = game:GetService("UserInputService")
 
 local DragResize = {}
 
--- position is in screen pixels, size in unscaled units; window:_apply() clamps both.
-function DragResize.drag(window, handles: { GuiObject })
-	for _, handle in handles do
-		window.cleanup:connect(handle.InputBegan, function(input)
-			if not window.options.Draggable or window.maximized or not Input.isPointer(input) then
-				return
-			end
-			local startPoint = Input.position(input)
-			local startPos = window.position
-			window.stopDrag = Input.drag(input, function(point)
-				window.position = startPos + (point - startPoint)
-				window:_apply(false)
-			end)
-		end)
+-- Query the rendered stack in screen pixels, in the same space as InputObject.Position.
+function DragResize.target(window, point: Vector2): GuiObject?
+	local container = window.gui:FindFirstAncestorWhichIsA("BasePlayerGui")
+	if not container then return nil end
+	for _, hit in container:GetGuiObjectsAtPosition(math.round(point.X), math.round(point.Y)) do
+		if hit == window.frame or hit:IsDescendantOf(window.frame) then return hit end
+		-- Ignore inert, transparent layout wrappers, but never drag through another visible surface.
+		if hit.Active or hit.BackgroundTransparency < 1 or hit:IsA("GuiButton") or hit:IsA("TextBox")
+			or hit:IsA("TextLabel") or hit:IsA("ImageLabel") or hit:GetAttribute("NoWindowDrag") or hit:GetAttribute("DragBlock") then
+			return nil
+		end
 	end
+	return nil
+end
+
+function DragResize.canDrag(window, target: GuiObject?, point: Vector2, touch: boolean): boolean
+	if not target or (target ~= window.frame and not target:IsDescendantOf(window.frame)) then return false end
+	local node = target
+	while node do
+		if node:GetAttribute("NoWindowDrag") or node:GetAttribute("DragBlock") or node:IsA("TextBox")
+			or (node:IsA("GuiButton") and node:GetAttribute("NoWindowDrag") ~= false) then
+			return false
+		end
+		if node:IsA("ScrollingFrame") and node.ScrollingEnabled then
+			-- Touch pans content; mouse may drag blank content, except the scrollbar gutter.
+			if touch then return false end
+			local pos, size = node.AbsolutePosition, node.AbsoluteSize
+			local thickness = node.ScrollBarThickness * window.scale
+			local vertical = node.AbsoluteCanvasSize.Y > node.AbsoluteWindowSize.Y
+			local horizontal = node.AbsoluteCanvasSize.X > node.AbsoluteWindowSize.X
+			local left = node.VerticalScrollBarPosition == Enum.VerticalScrollBarPosition.Left
+			if (vertical and (if left then point.X < pos.X + thickness else point.X >= pos.X + size.X - thickness))
+				or (horizontal and point.Y >= pos.Y + size.Y - thickness) then return false end
+		end
+		if node == window.frame then return true end
+		node = node.Parent
+	end
+	return false
+end
+
+-- One controller per window; permanent listeners are never re-created by a gesture or page change.
+function DragResize.drag(window)
+	local controller = {}
+	function controller.stop()
+		controller.candidate = nil
+		if window.stopDrag == controller.stop then window.stopDrag = nil end
+	end
+	function controller:begin(input)
+		if not window.options.Draggable or not window.visible or window.maximized or window.stopDrag or not Input.isPointer(input) then return false end
+		local point = Input.position(input)
+		local touch = input.UserInputType == Enum.UserInputType.Touch
+		local target = DragResize.target(window, point)
+		if not DragResize.canDrag(window, target, point, touch) then return false end
+		self.candidate = { input = input, point = point, position = window.position, dragging = false }
+		window.stopDrag = controller.stop
+		return false
+	end
+	function controller:move(input)
+		local drag = self.candidate
+		if not drag or (if drag.input.UserInputType == Enum.UserInputType.Touch then input ~= drag.input
+			else input.UserInputType ~= Enum.UserInputType.MouseMovement) then return end
+		local point = Input.position(input)
+		if not drag.dragging and (point - drag.point).Magnitude < 4 then return end
+		drag.dragging = true
+		-- Root UIScale changes its size, not its parent-relative Position: apply physical delta once.
+		window.position = drag.position + point - drag.point
+		window:_apply(false)
+	end
+	function controller:finish(input)
+		local drag = self.candidate
+		if not drag or (input ~= drag.input and not (drag.input.UserInputType == Enum.UserInputType.MouseButton1
+			and input.UserInputType == Enum.UserInputType.MouseButton1)) then return end
+		controller.stop()
+	end
+	window.cleanup:add(Input.listen(function(input) return controller:begin(input) end))
+	window.cleanup:connect(UserInputService.InputChanged, function(input) controller:move(input) end)
+	window.cleanup:connect(UserInputService.InputEnded, function(input) controller:finish(input) end)
+	window.cleanup:add(controller.stop)
+	return controller
 end
 
 function DragResize.resize(window, frame: GuiObject)
@@ -43,12 +108,15 @@ function DragResize.resize(window, frame: GuiObject)
 		if window.maximized or window.minimized or not Input.isPointer(input) then
 			return
 		end
+		if window.stopDrag then return end
 		local startPoint = Input.position(input)
 		local startSize = window.size
 		window.stopDrag = Input.drag(input, function(point)
 			local scale = window.ctx.scale()
 			window.size = startSize + (point - startPoint) / scale
 			window:_apply(false)
+		end, function()
+			window.stopDrag = nil
 		end)
 	end)
 	return grip

@@ -96,6 +96,7 @@ function Button.new(ctx, parent, options)
 		LayoutOrder = options.LayoutOrder,
 	}), Button)
 	self.options = options
+	self.Instance:SetAttribute("NoWindowDrag", true)
 
 	local button, label = Button.make({
 		Text = options.Title or "Button",

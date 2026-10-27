@@ -1,4 +1,5 @@
 local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
 
 local Library = script.Parent.Parent
 local Core = Library.Core
@@ -40,6 +41,7 @@ export type Options = {
 	Size: UDim2?,
 	MinSize: Vector2?,
 	ToggleKey: Enum.KeyCode?,
+	MaximizeKey: Enum.KeyCode?, -- Ctrl+Shift+key; Unknown disables the recovery shortcut.
 	Resizable: boolean?,
 	Draggable: boolean?,
 	Maximizable: boolean?,
@@ -73,6 +75,9 @@ function Window.new(options: Options)
 		BackgroundTransparency = 0.1,
 	}, options)
 	local account = Account.resolve(options)
+	options.MaximizeKey = options.MaximizeKey or (if options.ToggleKey == Enum.KeyCode.M then Enum.KeyCode.F10 else Enum.KeyCode.M)
+	assert(typeof(options.MaximizeKey) == "EnumItem" and options.MaximizeKey.EnumType == Enum.KeyCode, "MaximizeKey must be a KeyCode")
+	assert(options.MaximizeKey == Enum.KeyCode.Unknown or (options.MaximizeKey ~= options.ToggleKey and options.MaximizeKey ~= Enum.KeyCode.K), "MaximizeKey conflicts with an existing window shortcut")
 	options.Title, options.Subtitle = account.username or "Account", account.subtitle
 	for _, key in { "Scale", "BlurSize", "BlurTweenTime", "BackgroundTransparency" } do
 		local value = options[key]
@@ -117,12 +122,17 @@ function Window.new(options: Options)
 	self.gui = self.cleanup:add(Factory.new("ScreenGui", {
 		Name = options.Title,
 		ResetOnSpawn = false,
-		IgnoreGuiInset = true,
-		ScreenInsets = Enum.ScreenInsets.None,
+		ScreenInsets = Enum.ScreenInsets.CoreUISafeInsets,
 		ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
 		DisplayOrder = options.DisplayOrder or 50,
 		Parent = parent,
 	}))
+	self.safeArea = Factory.new("Frame", {
+		Name = "SafeArea",
+		Size = UDim2.fromScale(1, 1),
+		BackgroundTransparency = 1,
+		Parent = self.gui,
+	})
 
 	local registry = Registry.new()
 	local store = Store.new(options.Persistence)
@@ -142,6 +152,9 @@ function Window.new(options: Options)
 			if key == self.toggleKey then
 				return "the window toggle"
 			end
+			if key == self.options.MaximizeKey then
+				return "the window maximize shortcut"
+			end
 			return nil
 		end,
 	}
@@ -151,15 +164,13 @@ function Window.new(options: Options)
 	self.palette = self.cleanup:add(CommandPalette.new(self))
 	self:_bindInput()
 
-	local camera = workspace.CurrentCamera
-	self.cleanup:connect(camera:GetPropertyChangedSignal("ViewportSize"), function()
+	self.cleanup:connect(self.safeArea:GetPropertyChangedSignal("AbsoluteSize"), function()
 		self:_apply(false)
 	end)
-	local vp = camera.ViewportSize
-	self.position = Vector2.new(0, 0)
+	self.position = Vector2.zero
 	self:_apply(false)
 	local actual = self.size * self.scale
-	self.position = (vp - actual) / 2
+	self.position = (self.safeArea.AbsoluteSize - actual) / 2
 	self:_apply(false)
 	self.cleanup:add(function()
 		Blur.release(self, 0)
@@ -184,7 +195,7 @@ function Window:_buildFrame()
 		Name = "WindowRoot",
 		BackgroundTransparency = 1,
 		Visible = false,
-		Parent = self.gui,
+		Parent = self.safeArea,
 	})
 	self.uiScale = Factory.new("UIScale", { Parent = self.root })
 	self.fade = Factory.new("CanvasGroup", {
@@ -328,8 +339,10 @@ function Window:_buildFrame()
 	end)
 
 	local titles = Factory.new("Frame", {
+		Name = "HeaderDragRegion",
 		Size = UDim2.fromScale(0, 1),
 		BackgroundTransparency = 1,
+		Active = true,
 		LayoutOrder = 2,
 		Parent = header,
 	}, {
@@ -398,7 +411,7 @@ function Window:_buildFrame()
 		self:_toggleDrawer(false)
 	end)
 
-	DragResize.drag(self, { header, self.sidebar.dragZone })
+	self.dragController = DragResize.drag(self)
 	if options.Resizable then
 		self.grip = DragResize.resize(self, self.frame)
 	end
@@ -414,6 +427,12 @@ function Window:_bindInput()
 		end
 		if not self.visible then
 			return false
+		end
+		if self.options.Maximizable and key == self.options.MaximizeKey and key ~= Enum.KeyCode.Unknown
+			and not processed and not UserInputService:GetFocusedTextBox() and Input.ctrlDown()
+			and (UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) or UserInputService:IsKeyDown(Enum.KeyCode.RightShift)) then
+			self:ToggleMaximize()
+			return true
 		end
 		if self.palette:handleInput(input) then
 			return true
@@ -446,7 +465,8 @@ function Window:_fitScale(vp: Vector2): number
 end
 
 function Window:_apply(animate: boolean?)
-	local vp = workspace.CurrentCamera.ViewportSize
+	if self.destroyed then return end
+	local vp = self.safeArea.AbsoluteSize
 	if vp.X <= MARGIN * 2 or vp.Y <= MARGIN * 2 then
 		return
 	end
@@ -463,11 +483,6 @@ function Window:_apply(animate: boolean?)
 	end
 
 	local height = if self.minimized then HEADER else self.size.Y
-	local actual = Vector2.new(self.size.X, height) * scale
-	self.position = Vector2.new(
-		math.clamp(self.position.X, 0, math.max(0, vp.X - actual.X)),
-		math.clamp(self.position.Y, 0, math.max(0, vp.Y - actual.Y))
-	)
 
 	Animations.tween(self.uiScale, { Scale = scale })
 	self.root.Position = UDim2.fromOffset(math.round(self.position.X), math.round(self.position.Y))
@@ -494,6 +509,13 @@ end
 
 function Window:_layoutDrawer()
 	local sidebar = self.sidebar.Instance
+	local controls = self.sidebar.windowControls
+	local controlsParent = if self.narrow then self.header else sidebar
+	if controls.Parent ~= controlsParent then
+		controls.Parent = controlsParent
+		controls.LayoutOrder = -1
+		controls.Position = UDim2.fromOffset(16, 15)
+	end
 	self.menuButton.Visible = self.narrow
 	if self.narrow then
 		self.main.Position = UDim2.new()
@@ -686,6 +708,7 @@ function Window:Hide()
 		return
 	end
 	self.visible = false
+	if self.stopDrag then self.stopDrag() end
 	self.popups:closeAll()
 	self:_setBlur(false)
 	self.frame.Parent = self.fade
@@ -720,20 +743,38 @@ function Window:IsVisible(): boolean
 end
 
 function Window:SetMinimized(minimized: boolean)
+	assert(type(minimized) == "boolean", "SetMinimized needs a boolean")
+	if self.destroyed or self.minimized == minimized then return end
+	if self.stopDrag then self.stopDrag() end
 	self.minimized = minimized
 	self.popups:closeAll()
 	self:_apply(true)
 end
 
 function Window:SetMaximized(maximized: boolean)
-	if maximized then
+	assert(type(maximized) == "boolean", "SetMaximized needs a boolean")
+	if self.destroyed or (self.maximized == maximized and not self.minimized) then return end
+	if self.stopDrag then self.stopDrag() end
+	if maximized and not self.maximized then
 		self.restore = { size = self.size, position = self.position }
-	elseif self.restore then
+	elseif not maximized and self.maximized and self.restore then
 		self.size, self.position = self.restore.size, self.restore.position
 	end
 	self.maximized = maximized
 	self.minimized = false
 	self:_apply(false)
+end
+
+function Window:Maximize()
+	self:SetMaximized(true)
+end
+
+function Window:Restore()
+	self:SetMaximized(false)
+end
+
+function Window:ToggleMaximize()
+	self:SetMaximized(not self.maximized)
 end
 
 function Window:SetToggleKey(key: Enum.KeyCode)

@@ -93,6 +93,7 @@ end
 
 -- Binds this control to a store flag. apply(value) renders, called now and on every change.
 function Control:bind(default: any, apply: (any) -> ())
+	self.Instance:SetAttribute("NoWindowDrag", true)
 	local options, store = self.options, self.ctx.store
 	local id, value = store:define(options.Id, default)
 	self.id = id

@@ -96,18 +96,18 @@ function PopupManager:_input(input: InputObject): boolean
 end
 
 function PopupManager:_place(popup)
-	local frame, layer = popup.frame, self.layer
+	local frame, layer = popup.frame, popup.layer
 	local size = frame.AbsoluteSize
 	local bounds = layer.AbsoluteSize
 	local x, y
 
 	if popup.placement == "center" then
 		local within = popup.within or layer
-		local pos, area = within.AbsolutePosition, within.AbsoluteSize
+		local pos, area = within.AbsolutePosition - layer.AbsolutePosition, within.AbsoluteSize
 		x = pos.X + (area.X - size.X) / 2
 		y = pos.Y + math.min(area.Y * 0.16, math.max(area.Y - size.Y, 0) / 2)
 	elseif popup.anchor then
-		local pos, area = popup.anchor.AbsolutePosition, popup.anchor.AbsoluteSize
+		local pos, area = popup.anchor.AbsolutePosition - layer.AbsolutePosition, popup.anchor.AbsoluteSize
 		local gap = (popup.gap or 6) * self.scale
 		x = if popup.align == "right" then pos.X + area.X - size.X else pos.X
 		y = pos.Y + area.Y + gap
@@ -166,6 +166,7 @@ function PopupManager:open(options: Options)
 	}
 
 	local layer = options.layer or self.layer
+	popup.layer = layer
 	local parent = layer
 	if popup.modal then
 		local scrim = cleanup:add(Factory.button({
@@ -200,8 +201,14 @@ function PopupManager:open(options: Options)
 	end
 	cleanup:connect(frame:GetPropertyChangedSignal("AbsoluteSize"), place)
 	cleanup:connect(layer:GetPropertyChangedSignal("AbsoluteSize"), place)
+	cleanup:connect(layer:GetPropertyChangedSignal("AbsolutePosition"), place)
 	if popup.anchor then
 		cleanup:connect(popup.anchor:GetPropertyChangedSignal("AbsolutePosition"), place)
+		cleanup:connect(popup.anchor:GetPropertyChangedSignal("AbsoluteSize"), place)
+	end
+	if popup.within then
+		cleanup:connect(popup.within:GetPropertyChangedSignal("AbsolutePosition"), place)
+		cleanup:connect(popup.within:GetPropertyChangedSignal("AbsoluteSize"), place)
 	end
 	place()
 	if not popup.fixedScale then

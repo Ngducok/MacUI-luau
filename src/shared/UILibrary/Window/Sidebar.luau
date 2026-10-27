@@ -76,7 +76,8 @@ function Sidebar.new(window, parent: GuiObject, options)
 
 	self.dragZone = Factory.new("Frame", {
 		Name = "DragZone",
-		Size = UDim2.new(1, 0, 0, SEARCH_Y - 4),
+		Position = UDim2.fromOffset(80, 0),
+		Size = UDim2.new(1, -80, 0, SEARCH_Y - 4),
 		BackgroundTransparency = 1,
 		Active = true,
 		Parent = panel,
@@ -150,6 +151,7 @@ function Sidebar:_buildLights(panel: Frame)
 		Active = true,
 		Parent = panel,
 	}, { Factory.list(8, true) })
+	self.windowControls = holder
 	holder:SetAttribute("Hovered", false)
 
 	local specs = {
@@ -168,7 +170,7 @@ function Sidebar:_buildLights(panel: Frame)
 			{ 0, 0, 3, 1, 0 }, { 0, 0, 1, 3, 0 }, { 0, 1, 3, 1, 45 },
 			{ 4, 6, 3, 1, 0 }, { 6, 4, 1, 3, 0 }, { 4, 5, 3, 1, 45 },
 		}, function()
-			self.window:SetMaximized(not self.window.maximized)
+			self.window:ToggleMaximize()
 		end },
 	}
 

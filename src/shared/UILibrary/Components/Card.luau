@@ -108,6 +108,7 @@ function Card.new(section, options: Options)
 		if grid then Factory.corner(Theme.get("RadiusCard") - 2) else nil,
 		if grid then Factory.stroke("Border", 0.5) else nil,
 	}))
+	self.Instance:SetAttribute("NoWindowDrag", self.collapsible or options.NavigateTo ~= nil or options.Toggle == true)
 
 	self:_buildHeader()
 	self:_buildBody()
@@ -164,6 +165,7 @@ function Card:_buildHeader()
 		}),
 	})
 	self.header = header
+	header:SetAttribute("NoWindowDrag", self.collapsible or options.NavigateTo ~= nil)
 
 	if options.AnimatedIcon then
 		local anim = AnimatedImage.new(Util.merge(options.AnimatedIcon, { Size = UDim2.fromOffset(ICON + 4, ICON + 4) }))
