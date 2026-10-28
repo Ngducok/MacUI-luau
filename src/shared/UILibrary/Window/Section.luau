@@ -163,6 +163,32 @@ function Section:AddCard(options): any
 	return card
 end
 
+function Section:AddToggleDropdownGroup(options): any
+	local group = Card.newDropdownGroup(self, options)
+	table.insert(self.cards, group)
+	self:_refresh()
+	return group
+end
+
+function Section:AddPrioritySelector(options): any
+	options = table.clone(options or {})
+	local host = self:AddCard({ Title = options.Title or "Priority", Searchable = false })
+	host.header.Visible = false
+	host.content:FindFirstChildOfClass("UIPadding").PaddingTop = UDim.new(0, Theme.get("SpacingMedium"))
+	local ok, element = pcall(host.AddPrioritySelector, host, options)
+	if not ok then host:Destroy(); error(element, 2) end
+	local setVisible, onDestroy = element.SetVisible, element.onDestroy
+	element.SetVisible = function(control, visible)
+		setVisible(control, visible)
+		host:SetVisible(visible)
+	end
+	element.onDestroy = function(control)
+		onDestroy(control)
+		host:Destroy()
+	end
+	return element
+end
+
 function Section:_forget(card)
 	local index = table.find(self.cards, card)
 	if index then

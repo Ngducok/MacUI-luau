@@ -133,6 +133,21 @@ return function(parent: Instance?)
 		Toggle = true,
 		Default = true,
 	})
+	Behaviour:AddPrioritySelector({
+		Id = "task-priority", Title = "Task Order", Columns = 2,
+		Items = {
+			{ Id = "gather", Label = "Gather" },
+			{ Id = "craft", Label = "Craft" },
+			{ Id = "deliver", Label = "Deliver" },
+		},
+	})
+	local Filters = General:AddSection({ Title = "Filters" }):AddToggleDropdownGroup({
+		Id = "sample-filters", Title = "Filters", DefaultEnabled = true,
+		DefaultExpanded = false, Columns = 3, Responsive = true,
+	})
+	Filters:AddDropdown({ Id = "sample-region", Title = "Region", Options = { "North", "South", "West" }, Default = "North" })
+	Filters:AddDropdown({ Id = "sample-mode", Title = "Mode", Options = { "Fast", "Normal", "Safe" }, Default = "Normal" })
+	Filters:AddDropdown({ Id = "sample-quality", Title = "Quality", Options = { "Low", "Medium", "High" }, Default = "High" })
 
 	local Collect = General:AddSection({ Title = "Collection" })
 	local autoCollect = Collect:AddCard({
@@ -211,6 +226,60 @@ return function(parent: Instance?)
 	Quest:AddToggle({ Id = "quest-skip-dialog", Title = "Skip dialogue", Default = true })
 	local questProgress = Quest:AddProgress({ Title = "Current quest" })
 	table.insert(tracked, Quest)
+
+	local Rooms = { "Rare chest", "Treasure chest", "Hoard", "Shop", "Shrine", "Curse", "Boss", "Open chests" }
+	local RoomPriority = Farm:AddCard({
+		Id = "room-priority",
+		Title = "Room Priority",
+		Description = "Configure room priority order",
+		Toggle = true, Default = true, Collapsible = true,
+		DefaultExpanded = true,
+	})
+	-- Keep the demo's existing per-slot string flags; the reusable selector only stores stable IDs.
+	local roomIds = { "rare", "treasure", "hoard", "shop", "shrine", "curse", "boss", "open-chests" }
+	local roomItems, roomIdByLabel, roomLabelById = {}, {}, {}
+	local hasLegacyOrder = false
+	for index, label in Rooms do
+		local id = roomIds[index]
+		roomItems[index] = { Id = id, Label = label }
+		roomIdByLabel[label], roomLabelById[id] = id, label
+		local flag = Window.ctx.store:define(`priority-{index}`, label)
+		hasLegacyOrder = hasLegacyOrder or Window.ctx.store.saved[flag] ~= nil
+		Window.cleanup:add(function() Window.ctx.store:remove(flag) end)
+	end
+	local function legacyOrder()
+		local order, seen = {}, {}
+		for index = 1, #Rooms do
+			local id = roomIdByLabel[Window:GetFlag(`priority-{index}`)]
+			if id and not seen[id] then seen[id] = true; table.insert(order, id) end
+		end
+		for _, id in roomIds do if not seen[id] then table.insert(order, id) end end
+		return order
+	end
+	local syncingLegacy = false
+	local function writeLegacy(order)
+		syncingLegacy = true
+		for index, id in order do Window:SetFlag(`priority-{index}`, roomLabelById[id]) end
+		syncingLegacy = false
+	end
+	local roomSelector = RoomPriority:AddPrioritySelector({
+		Id = "room-priority-order", Items = roomItems, Default = legacyOrder(), Columns = "Auto",
+		OnChanged = writeLegacy,
+	})
+	if hasLegacyOrder then roomSelector:SetOrder(legacyOrder(), { Silent = true }) end
+	writeLegacy(roomSelector:GetOrder())
+	local syncPending = false
+	for index = 1, #Rooms do
+		Window.cleanup:add(Window:OnFlagChanged(`priority-{index}`, function()
+			if syncingLegacy or syncPending then return end
+			syncPending = true
+			task.defer(function()
+				syncPending = false
+				if not Window.destroyed then roomSelector:SetOrder(legacyOrder()) end
+			end)
+		end))
+	end
+	table.insert(tracked, RoomPriority)
 
 	local Scan = Automation:AddSection({ Title = "Server" })
 	local Scanner = Scan:AddCard({

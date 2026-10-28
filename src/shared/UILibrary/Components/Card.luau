@@ -16,6 +16,7 @@ local CONTROLS = {
 	Toggle = require(Components.Toggle),
 	Slider = require(Components.Slider),
 	Dropdown = require(Components.Dropdown),
+	PrioritySelector = require(Components.PrioritySelector),
 	Button = require(Components.Button),
 	Input = require(Components.Input),
 	Keybind = require(Components.Keybind),
@@ -51,12 +52,25 @@ export type Options = {
 	Searchable: boolean?,
 	NavigateTo: string?,
 	Popover: PopupManager.Policy?,
+	Layout: "CompactGrid"?,
+	Columns: ("Auto" | number)?,
+	UniqueChoices: boolean?,
+	Responsive: boolean?,
 }
 
 function Card.new(section, options: Options)
 	assert(options.NavigateTo == nil or type(options.NavigateTo) == "string", "NavigateTo must be a page ID")
 	assert(options.Popover == nil or type(options.Popover) == "table", "Popover must be a table")
+	assert(options.Layout == nil or options.Layout == "CompactGrid", "Card.Layout must be CompactGrid")
+	assert(options.Columns == nil or options.Columns == "Auto" or options.Columns == 1 or options.Columns == 2 or options.Columns == 3, "Columns must be Auto, 1, 2 or 3")
+	assert(options.UniqueChoices == nil or type(options.UniqueChoices) == "boolean", "UniqueChoices must be a boolean")
+	assert(options.Responsive == nil or type(options.Responsive) == "boolean", "Responsive must be a boolean")
 	local ctx = section.ctx
+	if options.Id then
+		for _, existing in section.cards or {} do
+			assert(existing.options.Id ~= options.Id, `Card id "{options.Id}" already exists in this section`)
+		end
+	end
 	local grid = section.grid
 	local self = setmetatable({
 		section = section,
@@ -67,6 +81,7 @@ function Card.new(section, options: Options)
 		visible = true,
 		disabled = false,
 		grid = grid,
+		compactDropdowns = options.Layout == "CompactGrid",
 		collapsible = options.Collapsible == true or grid,
 	}, Card)
 	self.expanded = self.collapsible and not grid and options.DefaultExpanded == true or not self.collapsible
@@ -141,6 +156,17 @@ function Card.new(section, options: Options)
 
 	section:_refresh()
 	return self
+end
+
+function Card.newDropdownGroup(section, options)
+	options = table.clone(options or {})
+	assert(options.DefaultEnabled == nil or type(options.DefaultEnabled) == "boolean", "DefaultEnabled must be a boolean")
+	options.Layout = options.Layout or "CompactGrid"
+	options.Toggle, options.Collapsible = true, true
+	if options.DefaultEnabled ~= nil then options.Default = options.DefaultEnabled end
+	local group = Card.new(section, options)
+	group.ClassName = "ToggleDropdownGroup"
+	return group
 end
 
 function Card:_buildHeader()
@@ -318,6 +344,48 @@ function Card:_buildBody()
 	})
 
 	self.body, self.content = holder, inner
+	if self.compactDropdowns then
+		inner:FindFirstChildOfClass("UIListLayout"):Destroy()
+		inner:FindFirstChildOfClass("UIPadding"):Destroy()
+		inner.Name = "DropdownGridContainer"
+		inner.AutomaticSize = Enum.AutomaticSize.None
+		Factory.padding(12, PAD_X).Parent = inner
+		self.dropdownLayout = Factory.new("UIGridLayout", {
+			CellPadding = UDim2.fromOffset(10, 12),
+			CellSize = UDim2.fromOffset(180, 54),
+			SortOrder = Enum.SortOrder.LayoutOrder,
+			Parent = inner,
+		})
+		self.cleanup:connect(inner:GetPropertyChangedSignal("AbsoluteSize"), function() self:_fitDropdownGrid() end)
+		self.cleanup:connect(self.dropdownLayout:GetPropertyChangedSignal("AbsoluteContentSize"), function()
+			-- Both absolute measurements include ancestor UIScale; convert back to layout pixels once.
+			local scale = self.dropdownLayout.AbsoluteCellSize.Y / 54
+			if scale <= 0 then return end
+			local height = self.dropdownLayout.AbsoluteContentSize.Y / scale
+			inner.Size = UDim2.new(1, 0, 0, if height > 0 then math.round(height) + 24 else 0)
+		end)
+		self:_fitDropdownGrid()
+	end
+end
+
+function Card:_fitDropdownGrid()
+	local width = math.floor(self.content.AbsoluteSize.X / self.ctx.scale() + 0.001) - PAD_X * 2
+	if width <= 0 then return end
+	local columns = if width >= 590 then 3 elseif width >= 370 then 2 else 1
+	-- Two pixels of hysteresis keep a boundary from oscillating during resize/scale rounding.
+	if self.dropdownColumns == 3 and width >= 588 then columns = 3
+	elseif self.dropdownColumns == 2 and width >= 368 and width < 590 then columns = 2 end
+	if type(self.options.Columns) == "number" then columns = math.min(columns, self.options.Columns) end
+	if self.options.Responsive == false and type(self.options.Columns) == "number" then
+		columns = math.min(self.options.Columns, math.max(1, math.floor((width + 10) / 180)))
+	end
+	self.dropdownColumns = columns
+	local cell = math.max(1, math.floor((width - 10 * (columns - 1)) / columns))
+	if self.dropdownCell ~= cell then
+		self.dropdownCell = cell
+		self.dropdownLayout.CellSize = UDim2.fromOffset(cell, 54)
+	end
+	self.dropdownLayout.FillDirectionMaxCells = columns
 end
 
 function Card:_buildSwitch()
@@ -486,12 +554,71 @@ end
 
 function Card:_add(kind: string, options: { [string]: any })
 	local class = CONTROLS[kind]
-	self.count += 1
 	options = table.clone(options or {})
+	local usedChoices
+	if options.Id then
+		for _, existing in self.controls do
+			assert(existing.options.Id ~= options.Id, `Element id "{options.Id}" already exists in this card`)
+		end
+	end
+	if self.compactDropdowns then
+		assert(kind == "Dropdown", "CompactGrid groups accept dropdowns only")
+		options._CompactGrid = true
+	end
+	if self.options.UniqueChoices and kind == "Dropdown" then
+		assert(options.Multi ~= true, "UniqueChoices requires single-select dropdowns")
+		local used = {}
+		usedChoices = used
+		for _, field in self.controls do used[field:GetValue()] = true end
+		if options.Default == nil or used[options.Default] then
+			options.Default = nil
+			for _, item in options.Options or {} do
+				local value = if type(item) == "table" then item.Value else item
+				if value ~= nil and not used[value] then options.Default = value break end
+			end
+			assert(options.Default ~= nil, "UniqueChoices requires an unused option for each slot")
+		end
+	end
 	self.controlOrder = (self.controlOrder or 0) + 1
 	options._SearchId = `{self.ctx.searchId}/control:{options.Id or self.controlOrder}`
-	options.LayoutOrder = options.LayoutOrder or self.count
-	local control = class.new(self.ctx, self.content, options)
+	options.LayoutOrder = options.LayoutOrder or self.count + 1
+	local control
+	if kind == "ToggleDropdownGroup" then
+		local host = setmetatable({
+			ctx = self.ctx, container = self.content, grid = false, order = 0, cards = {},
+			_refresh = function() end, _forget = function() end,
+		}, { __index = self.section })
+		control = Card.newDropdownGroup(host, options)
+		control.Instance.LayoutOrder = options.LayoutOrder
+	else
+		control = class.new(self.ctx, self.content, options)
+	end
+	self.count += 1
+	if self.options.UniqueChoices and kind == "Dropdown" then
+		if usedChoices[control:GetValue()] then control:SetValue(options.Default) end
+		local setValue = control.SetValue
+		control.SetValue = function(field, value)
+			local previous = field:GetValue()
+			if previous == value then return end
+			local valid = false
+			for _, item in field.items do
+				if (if type(item) == "table" then item.Value else item) == value then valid = true break end
+			end
+			assert(valid, "UniqueChoices value must be in Options")
+			for _, other in self.controls do
+				if other ~= field and other:GetValue() == value then
+					local canSwap = false
+					for _, item in other.items do
+						if (if type(item) == "table" then item.Value else item) == previous then canSwap = true break end
+					end
+					assert(canSwap, "UniqueChoices slots must support the swapped value")
+					setValue(other, previous)
+					break
+				end
+			end
+			setValue(field, value)
+		end
+	end
 	control.kind = kind
 	control.onDestroy = function(c)
 		local index = table.find(self.controls, c)
@@ -507,6 +634,10 @@ function Card:_add(kind: string, options: { [string]: any })
 	end
 	self:_layoutBody(false)
 	return control
+end
+
+function Card:AddToggleDropdownGroup(options)
+	return self:_add("ToggleDropdownGroup", options)
 end
 
 for kind in CONTROLS do
@@ -565,6 +696,7 @@ function Card:SetTitle(title: string)
 	self.ctx.cardTitle = title
 	self.ctx.registry:update(self.registryKey, { title = title })
 	for _, control in self.controls do
+		if control.ClassName == "ToggleDropdownGroup" then control:SetTitle(control.options.Title) end
 		if control.registryKey then
 			self.ctx.registry:update(control.registryKey, {
 				subtitle = self.ctx.searchPath,
@@ -653,6 +785,7 @@ function Card:Destroy()
 	end
 	self.cleanup:clean()
 	self.section:_forget(self)
+	if self.onDestroy then self.onDestroy(self) end
 end
 
 return Card

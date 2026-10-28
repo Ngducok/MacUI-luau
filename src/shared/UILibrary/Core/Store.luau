@@ -48,7 +48,7 @@ Store.encode = encode
 Store.decode = decode
 
 function Store.new(adapter: Adapter?)
-	local self = setmetatable({ values = {}, listeners = {}, saved = {}, adapter = adapter, auto = 0 }, Store)
+	local self = setmetatable({ values = {}, listeners = {}, saved = {}, defined = {}, normalizers = {}, adapter = adapter, auto = 0 }, Store)
 	if adapter and adapter.Load then
 		local ok, data = pcall(adapter.Load)
 		if ok and type(data) == "table" then
@@ -60,13 +60,12 @@ function Store.new(adapter: Adapter?)
 	return self
 end
 
-function Store:define(id: string?, default: any): (string, any)
+function Store:define(id: string?, default: any, normalize: ((any) -> any)?): (string, any)
 	if id == nil then
-		self.auto += 1
-		id = `_auto{self.auto}`
-	elseif self.values[id] ~= nil then
-		warn(`[MacUI] flag "{id}" is registered twice; the later control replaces it`)
+		repeat self.auto += 1; id = `_auto{self.auto}` until not self.defined[id]
 	end
+	assert(type(id) == "string" and id ~= "", "Flag Id must be a non-empty string")
+	assert(not self.defined[id], `Flag id "{id}" already exists in this window`)
 
 	local value = default
 	local raw = self.saved[id]
@@ -76,6 +75,9 @@ function Store:define(id: string?, default: any): (string, any)
 			value = decoded
 		end
 	end
+	if normalize then value = normalize(value) end
+	self.defined[id] = true
+	self.normalizers[id] = normalize
 	self.values[id] = value
 	return id, value
 end
@@ -85,6 +87,7 @@ function Store:get(id: string): any
 end
 
 function Store:set(id: string, value: any): boolean
+	if self.normalizers[id] then value = self.normalizers[id](value) end
 	local old = self.values[id]
 	if old == value and type(value) ~= "table" then
 		return false
@@ -118,6 +121,8 @@ end
 -- Drops the value only; other subscribers (e.g. Window:OnFlagChanged) keep their listeners.
 function Store:remove(id: string)
 	self.values[id] = nil
+	self.defined[id] = nil
+	self.normalizers[id] = nil
 end
 
 function Store:snapshot(): { [string]: any }

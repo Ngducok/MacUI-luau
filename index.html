@@ -244,6 +244,12 @@
         font-size: 12px;
         color: #dddde4;
       }
+      .syntax-keyword { color: #d5a5f5; }
+      .syntax-string { color: #a8d8a2; }
+      .syntax-number { color: #e6bd91; }
+      .syntax-comment { color: #96969e; }
+      .syntax-builtin { color: #a4c6ff; }
+      .syntax-function { color: #ebd59b; }
       pre button {
         position: absolute;
         right: 10px;
@@ -400,6 +406,7 @@
         h2,
         h3,
         pre code,
+        pre code span,
         .signature {
           color: black;
         }
@@ -839,6 +846,35 @@ Grid:AddCard({ Id = "diagnostics", Title = "Diagnostics", Icon = "gear" })</code
             DefaultExpanded controls its starting state. Height follows content
             automatically.
           </p>
+          <h3>Compact dropdown group</h3>
+          <pre><code class="language-luau">local Group = Section:AddToggleDropdownGroup({
+    Id = "sample-filters", Title = "Filters",
+    DefaultEnabled = true, DefaultExpanded = false,
+    Layout = "CompactGrid", Columns = 3, Responsive = true,
+})
+Group:AddDropdown({ Id = "sample-region", Title = "Region", Options = { "North", "South", "West" }, Default = "North" })
+Group:AddDropdown({ Id = "sample-mode", Title = "Mode", Options = { "Fast", "Normal", "Safe" }, Default = "Normal" })
+Group:AddDropdown({ Id = "sample-quality", Title = "Quality", Options = { "Low", "Medium", "High" }, Default = "High" })</code></pre>
+          <p>
+            Section or Card can create this group. Returns a Card with the same expansion, enabled-state and cleanup methods.
+            Fields use three columns at 590px of inner content width, two at 370px,
+            otherwise one. Resizing updates the grid; Columns = 1, 2 or 3 caps its
+            column count with the same narrow-width fallback. Labels are optional;
+            selected values truncate. Menus use the existing overlay layer.
+            Responsive defaults to true. With Responsive false and numeric Columns,
+            that count is used whenever cells remain at least 170px wide; narrow widths still fall back safely.
+            Ordinary cards keep their existing layout; Layout = "CompactGrid"
+            also works with AddCard and accepts dropdowns only.
+          </p>
+          <p>
+            UniqueChoices defaults to false, allowing duplicates in generic groups.
+            The existing UniqueChoices option remains supported for single-select slots sharing the same options:
+            choosing an occupied value swaps both slots and fires their individual
+            Callback functions only for changed values. The header Callback still
+            receives the enabled boolean; the chevron only expands or collapses.
+            Dropdown Id flags and the group &lt;Id&gt;.enabled flag keep existing persistence.
+            Use PrioritySelector below for insert-and-shift rank ordering.
+          </p>
           <div class="table-wrap">
             <table>
               <thead>
@@ -903,6 +939,144 @@ Grid:AddCard({ Id = "diagnostics", Title = "Diagnostics", Icon = "gear" })</code
 
         <section id="controls">
           <h2>Controls</h2>
+          <h3 id="element-inventory">Public element inventory</h3>
+          <p>
+            These are the actual constructors and variants in MacUI. Module/type names use
+            PascalCase; creation methods keep the established CreateWindow, Add* and Notify conventions.
+            Internal Factory, Store, Registry and overlay helpers retain their internal method names.
+            No feature-specific element exports exist. Labels belong to callers and may repeat across pages.
+          </p>
+          <p>
+            In this table, common control options are Id, Title, Description, LayoutOrder,
+            Searchable, Keywords, Aliases and Icon (search icon). Bound controls also accept Default and Callback.
+            Common control methods are GetValue, SetValue, SetVisible, SetDisabled, SetTitle,
+            SetDescription and Destroy; display controls use local values rather than saved flags.
+            Every returned control has Instance. Options and exceptions follow below.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Element / module</th><th>Constructor / host</th><th>Configuration</th><th>Return / methods / state</th></tr></thead>
+              <tbody>
+                <tr><td>Window (Window.Options)</td><td>MacUI:CreateWindow</td><td><a href="#window-options">All window options</a></td><td>Window; <a href="#window-api">navigation, visibility, sizing, flags, overlays, Destroy</a>. Owns pages, Store and Registry.</td></tr>
+                <tr><td>Page; tab navigation</td><td>Window:AddPage</td><td>Id, Title, Description, Icon, Badge, Group, Keywords, Aliases, Build, Sidebar</td><td>Page; AddSection, GetSections, CardCount, ScrollTo, EnsureBuilt, SetTitle, SetBadge, Destroy. No separate Tab type or AddTab.</td></tr>
+                <tr><td>Section</td><td>Page:AddSection</td><td>Title, Description, Layout (List/Grid), Columns</td><td>Section; AddCard, AddPrioritySelector, AddToggleDropdownGroup, GetCards, SetVisible, Destroy. No Section Id option or saved value.</td></tr>
+                <tr><td>Card</td><td>Section:AddCard</td><td>Id, Title, Description, Icon, AnimatedIcon, Badge, Toggle, Default, Callback, Collapsible, DefaultExpanded, Keywords, Aliases, Searchable, NavigateTo, Popover, Layout, Columns, UniqueChoices, Responsive</td><td>Card; all listed Add* controls, AddAction, GetControls, SetExpanded/IsExpanded, SetEnabled/GetEnabled, SetTitle, SetDescription, SetBadge, SetLoading, SetDisabled, SetVisible, Focus, Flash, Destroy. Toggle uses &lt;Id&gt;.enabled.</td></tr>
+                <tr><td>Button</td><td>Card:AddButton</td><td>Common + Label, Variant, Align, SearchTitle, Callback; Title is button text</td><td>Button; common methods + SetText. Action callback, no bound state.</td></tr>
+                <tr><td>Toggle</td><td>Card:AddToggle</td><td>Common + Default, Callback, OnColor, OffColor</td><td>Toggle; common methods; boolean flag.</td></tr>
+                <tr><td>Slider</td><td>Card:AddSlider</td><td>Common + Default, Callback, Min, Max, Step, Suffix, Color</td><td>Slider; common methods; numeric flag.</td></tr>
+                <tr><td>Dropdown</td><td>Card:AddDropdown; ToggleDropdownGroup:AddDropdown</td><td>Common + Default, Callback, Options (strings or Label/Value objects), Multi, Width, Searchable</td><td>Dropdown; common + Open, Close, SetOptions, GetOptions; selected value flag. Searchable also enables menu search.</td></tr>
+                <tr><td>MultiDropdown variant</td><td>Card:AddDropdown({ Multi = true })</td><td>Dropdown options, Default array</td><td>Same Dropdown class; array flag. No separate AddMultiDropdown constructor.</td></tr>
+                <tr><td>Input / TextInput</td><td>Card:AddInput</td><td>Common + Default, Callback, Width, Placeholder, Clearable, Live, SubmitOnEnter, Validate, OnSubmit</td><td>Input; common + Focus; string flag. TextInput is an internal variable name, not a second public constructor.</td></tr>
+                <tr><td>Keybind</td><td>Card:AddKeybind</td><td>Common + Default (KeyCode), Callback, OnPress</td><td>Keybind; common methods; KeyCode flag; Unknown clears binding.</td></tr>
+                <tr><td>ColorPicker</td><td>Card:AddColorPicker</td><td>Common + Default (Color3), Callback, Transparency</td><td>ColorPicker; common + Open, Close, GetTransparency, SetTransparency; color flag and optional &lt;Id&gt;.transparency flag.</td></tr>
+                <tr><td>Label (Display.Label)</td><td>Card:AddLabel</td><td>Common + Value</td><td>Label; common methods; local text, no flag.</td></tr>
+                <tr><td>Paragraph (Display.Paragraph)</td><td>Card:AddParagraph</td><td>Title, Content, Text (Content alias), LayoutOrder</td><td>Paragraph; SetValue, GetValue, SetDescription, SetTitle, SetVisible, SetDisabled, Destroy; local text, no flag.</td></tr>
+                <tr><td>Divider (Display.Divider)</td><td>Card:AddDivider</td><td>LayoutOrder</td><td>Divider; SetVisible, SetDisabled, Destroy; no value or flag.</td></tr>
+                <tr><td>Status (Display.Status)</td><td>Card:AddStatus</td><td>Common + Value, Kind</td><td>Status; common methods; SetValue(text, kind?); local badge text, no flag.</td></tr>
+                <tr><td>Badge</td><td>Card:SetBadge; Page:SetBadge; Badge option</td><td>Text; Card kind: Neutral, Success, Warning, Danger, Accent</td><td>Decoration owned by parent; no AddBadge or independent saved state.</td></tr>
+                <tr><td>Progress (Display.Progress)</td><td>Card:AddProgress</td><td>Common + Value (0–1 or nil), Width, Color</td><td>Progress; common methods; local progress, nil animates, no flag.</td></tr>
+                <tr><td>Image (Display.Image)</td><td>Card:AddImage</td><td>Common + Image, Height, ScaleType; animation options below</td><td>Image; common visibility/disable/text methods + GetValue, Play, Pause, Destroy; no flag.</td></tr>
+                <tr><td>AnimatedImage in Card</td><td>Card:AddAnimatedImage</td><td>Image, Height, FrameSize, Columns, Frames, FPS, Loop, Autoplay, Speed, Title, Description, LayoutOrder</td><td>Existing alias of AddImage; same Image wrapper, Play/Pause; no flag.</td></tr>
+                <tr><td>AnimatedImage standalone</td><td>MacUI.AnimatedImage.new</td><td>Image, FrameSize, Columns, Frames, FPS, Loop, Autoplay, Speed, Size</td><td>AnimatedImage with Instance; Play, Pause, SetFrame, SetSpeed, IsPlaying, Destroy. Caller parents Instance and owns cleanup.</td></tr>
+                <tr><td>PrioritySelector (Options, Item)</td><td>Section:AddPrioritySelector; Card:AddPrioritySelector</td><td>Common + Items, Default (ID order), Columns, OnChanged; Callback alias</td><td>PrioritySelector; GetOrder, SetOrder, Move, SetItems and common methods. GetValue/SetValue alias order methods; array-of-ID flag.</td></tr>
+                <tr><td>ToggleDropdownGroup</td><td>Section:AddToggleDropdownGroup; Card:AddToggleDropdownGroup</td><td>Card options + DefaultEnabled, DefaultExpanded, Columns, Responsive, Layout = CompactGrid; UniqueChoices retained</td><td>Card adapter with ClassName ToggleDropdownGroup; AddDropdown and Card methods. Own &lt;Id&gt;.enabled plus independent child flags; never aliases PrioritySelector.</td></tr>
+                <tr><td>Popover (PopupManager)</td><td>Feature Card:SetExpanded; dropdown/color Open</td><td>Card Popover: OpenOn, CloseOnOutsideClick, CloseOnEscape, CloseOnMouseLeave=false, CloseOnInteraction=false</td><td>Owned overlay; Card:SetExpanded(false) or control:Close. No public AddPopover. Existing internal popup handles use close().</td></tr>
+                <tr><td>Tooltip (Display.tooltip)</td><td>Card:AddAction; Window:AddHeaderAction</td><td>Tooltip string alongside Icon/Text and Callback</td><td>Owned hover overlay; action returns GUI button; no AddTooltip or saved state.</td></tr>
+                <tr><td>Notification / Toast (Notifications)</td><td>Window:Notify</td><td>Title, Content, Kind (info/success/warning/error), Duration, Actions (Text/Callback)</td><td>Close function; window owns lifecycle. Notify is unchanged; no AddToast.</td></tr>
+                <tr><td>Dialog</td><td>Window:Confirm</td><td>Title, Content, ConfirmText, CancelText, Destructive, OnConfirm, OnCancel</td><td>Popup handle with close(); no flag.</td></tr>
+                <tr><td>CommandPalette</td><td>Window:OpenCommandPalette(query?); Ctrl/Cmd+K</td><td>Window PalettePreserveQuery; initial query</td><td>Opens existing per-window palette; no new component instance returned.</td></tr>
+                <tr><td>Search (Sidebar + Registry)</td><td>Automatic sidebar search</td><td>Window SearchPlaceholder; element Searchable, Keywords, Aliases, SearchTitle for buttons</td><td>Per-window registry with page/card/control paths; no AddSearch or standalone flag.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <h3>Identity, ownership and compatibility</h3>
+          <p>
+            Page IDs are unique within a window. Card IDs are unique within their Section;
+            nested elements are unique within their Card. Stateful control IDs are flag keys
+            and must also be unique across the entire window, including pages and nested groups.
+            Reserve AutoCensorUser, toggle &lt;Id&gt;.enabled and color &lt;Id&gt;.transparency keys.
+            Generated _auto IDs are transient and excluded from configuration exports.
+            Priority item IDs are local to each selector; labels are unrestricted and may repeat.
+            Two windows may reuse IDs because each owns its Store and Registry.
+          </p>
+          <p>
+            Section creates a headerless Card host for a direct PrioritySelector; Destroy removes that host.
+            Card owns nested selectors/groups; Section owns Cards; Window owns pages and overlays.
+            Hiding or reopening a host keeps values and order. A PrioritySelector clears its
+            popover selection when its host hides or collapses; destruction disconnects observers.
+            Existing method names, flag keys and constructors remain supported. AddAnimatedImage remains
+            the AddImage adapter; Multi=true and AddInput keep their established names.
+            No old feature-specific selector API existed, so no fictitious aliases were added.
+            Duplicate flag registration now raises an error instead of warning and replacing another control:
+            callers that reused state IDs must assign distinct IDs. Registry update behavior stays internal.
+          </p>
+          <h3 id="priority-selector">PrioritySelector: Rank Chips</h3>
+          <pre><code class="language-luau">local RoomsCard = Section:AddCard({
+    Id = "example-room-order", Title = "Room Priority",
+    Toggle = true, Default = true, Collapsible = true, DefaultExpanded = true,
+})
+local RoomsPriority = RoomsCard:AddPrioritySelector({
+    Id = "rooms-priority", Columns = "Auto",
+    Items = {
+        { Id = "rare", Label = "Rare chest" },
+        { Id = "treasure", Label = "Treasure chest" },
+        { Id = "shop", Label = "Shop" },
+    },
+    OnChanged = function(order) print(table.concat(order, ", ")) end,
+})
+-- A second instance in another page and container, with independent state.
+local TasksPage = Window:AddPage({ Id = "tasks", Title = "Tasks" })
+local TasksPriority = TasksPage:AddSection({ Title = "Planning" }):AddPrioritySelector({
+    Id = "task-priority", Title = "Task Order", Columns = 2,
+    Items = {
+        { Id = "task-a", Label = "Gather" },
+        { Id = "task-b", Label = "Craft" },
+        { Id = "task-c", Label = "Deliver" },
+    },
+})
+TasksPriority:Move("task-a", 3) -- task-b, task-c, task-a
+local copy = TasksPriority:GetOrder()
+TasksPriority:SetOrder({ "task-c", "task-a" }) -- appends missing task-b
+TasksPriority:SetOrder(copy, { Silent = true })
+TasksPriority:SetItems({ { Id = "task-a", Label = "Gather supplies" }, { Id = "task-d", Label = "Build" } })</code></pre>
+          <p>
+            Each 38px chip uses the Settings surface, a compact rank badge, 13px label and chevron.
+            Selection stays neutral, with accent color limited to the rank. Activate a chip to open
+            its anchored position popover; activate it again to close, or another chip to switch anchors.
+            A position button moves the item and closes the popover. Moving removes and inserts the
+            item, shifting intervening items; it does not swap. Choosing its current position only closes.
+            Outside click/tap, Escape, the dismiss button, page switching and hiding/collapsing the
+            parent close without changing order. Escape restores native selection focus to the chip
+            when focus was within the selector; it does not close the parent popover.
+            Mouse leave and input release alone never dismiss. Scroll gestures suppress activation.
+            Mouse, touch and native selectable-button navigation share Activated.
+            The popover uses the shared popup surface and animations, renders above scrollable
+            content, and flips or shifts to fit the safe viewport. Opening it never changes page height.
+            Its width is 200–260px, reduced for smaller viewports. Positions use 30px buttons:
+            up to four remain compact and left-aligned; larger sets wrap, scrolling beyond three rows
+            or sooner when viewport height is limited.
+            Columns defaults to 2, falling back to 1 below 370px of inner content width.
+            Columns = "Auto" enables 3 at 590px; numeric Columns caps that count.
+            A two-pixel hysteresis avoids boundary jitter.
+          </p>
+          <p>
+            Items accepts Id/Label objects or strings (a string supplies both).
+            Default is an ID array. Duplicate item IDs, unknown/duplicate SetOrder IDs,
+            sparse arrays and non-integer/out-of-range Move positions raise errors.
+            SetOrder appends missing IDs; SetItems preserves surviving order, removes stale IDs,
+            appends new IDs and clears a removed selection. Empty and single-item lists are supported.
+            GetOrder returns a copy. Effective changes emit OnChanged once; Callback is its
+            compatibility spelling when OnChanged is omitted. Programmatic setters emit by default;
+            SetOrder(..., { Silent = true }) suppresses the component callback only.
+            Loaded/imported order flags reconcile stale IDs without mutating caller arrays.
+          </p>
+          <p>
+            The executor demo now uses PrioritySelector for Room Priority and a separate Task Order
+            on General. Its consumer-side adapter preserves legacy priority-1 through priority-N string
+            flags and room-priority.enabled, synchronizes them with room-priority-order stable IDs,
+            and coalesces legacy imports. Filters still demonstrates ToggleDropdownGroup separately.
+            None of those feature names, room labels or flag mappings belong to the selector module.
+          </p>
           <p>
             Create controls through Card. Common options: <code>Id</code>,
             <code>Title</code>, <code>Description</code>, <code>Callback</code>,
@@ -1620,8 +1794,8 @@ Window:Destroy()</code></pre>
           <h3>Duplicate page / flag</h3>
           <p>
             Use unique page IDs and avoid account while its built-in page is
-            enabled. Use unique control flag IDs; duplicate flags emit a warning
-            and later registrations replace the stored value.
+            enabled. Use unique control flag IDs across the window; duplicate
+            registrations now raise an error and leave the original value intact.
           </p>
           <h3>Executor-specific failure</h3>
           <p>
@@ -1645,6 +1819,44 @@ Window:Destroy()</code></pre>
       aria-live="polite"
     ></div>
     <script>
+      const luauKeywords = new Set(
+        "and break continue do else elseif end export false for function if in local nil not or repeat return then true type until while".split(" "),
+      );
+      const luauBuiltins = new Set(
+        "assert error getmetatable ipairs loadstring next pairs pcall print rawequal rawget rawset require select setmetatable tonumber tostring typeof type unpack warn xpcall bit32 buffer coroutine debug math os string table task utf8 game workspace script Enum Instance Color3 ColorSequence NumberSequence UDim UDim2 Vector2 Vector3 CFrame Font Rect TweenInfo".split(" "),
+      );
+      function highlightLuau(code) {
+        const source = code.textContent;
+        // ponytail: interpolated strings use one color; tokenize expressions if docs need it.
+        const tokens = /--\[(=*)\[[\s\S]*?\]\1\]|--[^\r\n]*|\[(=*)\[[\s\S]*?\]\2\]|"(?:\\[\s\S]|[^"\\\r\n])*"|'(?:\\[\s\S]|[^'\\\r\n])*'|`(?:\\[\s\S]|[^`\\])*`|\b(?:0[xX][\da-fA-F_]+(?:\.[\da-fA-F_]*)?(?:[pP][+-]?[\d_]+)?|0[bB][01_]+|\d[\d_]*(?:\.(?!\.)[\d_]*)?(?:[eE][+-]?[\d_]+)?)|\B\.\d[\d_]*(?:[eE][+-]?[\d_]+)?|\b[A-Za-z_]\w*\b/g;
+        const parts = [];
+        let end = 0;
+        for (const match of source.matchAll(tokens)) {
+          const token = match[0];
+          const kind = token.startsWith("--") ? "comment"
+            : /^["'`\[]/.test(token) ? "string"
+            : /^(?:\d|\.\d)/.test(token) ? "number"
+            : luauKeywords.has(token) ? "keyword"
+            : luauBuiltins.has(token) ? "builtin"
+            : /^\s*\(/.test(source.slice(match.index + token.length)) ? "function"
+            : null;
+          parts.push(source.slice(end, match.index));
+          if (kind) {
+            const span = document.createElement("span");
+            span.className = `syntax-${kind}`;
+            span.textContent = token;
+            parts.push(span);
+          } else {
+            parts.push(token);
+          }
+          end = match.index + token.length;
+        }
+        parts.push(source.slice(end));
+        code.replaceChildren(...parts);
+      }
+      for (const code of document.querySelectorAll("pre code.language-luau")) {
+        highlightLuau(code);
+      }
       for (const block of document.querySelectorAll("pre")) {
         const button = document.createElement("button");
         button.type = "button";

@@ -22,13 +22,28 @@ local function valueOf(option: any): any
 end
 
 function Dropdown.new(ctx, parent, options)
-	local self = setmetatable(Control.new(ctx, parent, options), Dropdown)
+	local compact = options._CompactGrid == true
+	local self = setmetatable(Control.new(ctx, parent, options, compact), Dropdown)
 	self.items = options.Options or {}
 	self.multi = options.Multi == true
+	if compact then
+		self.Instance.AutomaticSize = Enum.AutomaticSize.None
+		self.Instance.Size = UDim2.new(1, 0, 0, 54)
+		self.Instance:FindFirstChildOfClass("UIListLayout").Padding = UDim.new(0, 6)
+		self.widget.AutomaticSize = Enum.AutomaticSize.None
+		self.widget.Size = UDim2.new(1, 0, 0, 32)
+		if self.titleLabel then
+			self.titleLabel.Size = UDim2.new(1, 0, 0, 16)
+			self.titleLabel.FontFace = Theme.Typography.Hint.FontFace
+			self.titleLabel.TextSize = Theme.Typography.Hint.TextSize
+			Theme.bind(self.titleLabel, { TextColor3 = "TextMuted" })
+			self.descriptionLabel.Visible = false
+		end
+	end
 
 	local field = Factory.button({
 		Name = "Field",
-		Size = UDim2.fromOffset(options.Width or 160, 28),
+		Size = if compact then UDim2.new(1, 0, 0, 32) else UDim2.fromOffset(options.Width or 160, 28),
 		BackgroundTransparency = 0,
 		LayoutOrder = 1,
 		Parent = self.widget,
@@ -156,7 +171,7 @@ function Dropdown:Open()
 	end
 	local options = self.options
 	local searchable = options.Searchable == true or #self.items > 10
-	local width = math.max(self.field.AbsoluteSize.X / self.ctx.popups.scale, 200)
+	local width = math.max(self.field.AbsoluteSize.X / self.ctx.popups.scale, if options._CompactGrid then 1 else 200)
 	local surface = PopupManager.surface(width, { Name = "DropdownMenu" })
 	Factory.list(0).Parent = surface
 
@@ -329,11 +344,18 @@ function Dropdown:Open()
 		end)
 	end
 
+	local followWidth
+	if options._CompactGrid then
+		followWidth = self.field:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
+			surface.Size = UDim2.fromOffset(math.max(1, math.round(self.field.AbsoluteSize.X / self.ctx.popups.scale)), 0)
+		end)
+	end
 	self.popup = self.ctx.popups:open({
 		content = surface,
 		anchor = self.field,
 		align = "right",
 		onClose = function()
+			if followWidth then followWidth:Disconnect() end
 			stopKeys()
 			self.popup = nil
 			self.renderList = nil
