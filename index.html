@@ -452,7 +452,7 @@
           ><a href="#notifications">Notifications &amp; dialogs</a
           ><a href="#search">Search &amp; palette</a
           ><a href="#themes">Themes &amp; typography</a
-          ><a href="#icons">Icons</a><a href="#animation">Animated images</a
+          ><a href="#icons">Icons</a
           ><a href="#flags">Flags &amp; configuration</a
           ><a href="#persistence">Persistence</a
           ><a href="#lifecycle">Lifecycle</a
@@ -975,7 +975,7 @@ Group:AddDropdown({ Id = "sample-quality", Title = "Quality", Options = { "Low",
                 <tr><td>Status (Display.Status)</td><td>Card:AddStatus</td><td>Common + Value, Kind</td><td>Status; common methods; SetValue(text, kind?); local badge text, no flag.</td></tr>
                 <tr><td>Badge</td><td>Card:SetBadge; Page:SetBadge; Badge option</td><td>Text; Card kind: Neutral, Success, Warning, Danger, Accent</td><td>Decoration owned by parent; no AddBadge or independent saved state.</td></tr>
                 <tr><td>Progress (Display.Progress)</td><td>Card:AddProgress</td><td>Common + Value (0–1 or nil), Width, Color</td><td>Progress; common methods; local progress, nil animates, no flag.</td></tr>
-                <tr><td>Image (Display.Image)</td><td>Card:AddImage</td><td>Common + Image, Height, ScaleType; animation options below</td><td>Image; common visibility/disable/text methods + GetValue, Play, Pause, Destroy; no flag.</td></tr>
+                <tr><td>Image (Display.Image)</td><td>Card:AddImage</td><td>Common + Image, Height, ScaleType</td><td>Image; common visibility/disable/text methods + GetValue, Play, Pause, Destroy; no flag.</td></tr>
                 <tr><td>AnimatedImage in Card</td><td>Card:AddAnimatedImage</td><td>Image, Height, FrameSize, Columns, Frames, FPS, Loop, Autoplay, Speed, Title, Description, LayoutOrder</td><td>Existing alias of AddImage; same Image wrapper, Play/Pause; no flag.</td></tr>
                 <tr><td>AnimatedImage standalone</td><td>MacUI.AnimatedImage.new</td><td>Image, FrameSize, Columns, Frames, FPS, Loop, Autoplay, Speed, Size</td><td>AnimatedImage with Instance; Play, Pause, SetFrame, SetSpeed, IsPlaying, Destroy. Caller parents Instance and owns cleanup.</td></tr>
                 <tr><td>PrioritySelector (Options, Item)</td><td>Section:AddPrioritySelector; Card:AddPrioritySelector</td><td>Common + Items, Default (ID order), Columns, OnChanged; Callback alias</td><td>PrioritySelector; GetOrder, SetOrder, Move, SetItems and common methods. GetValue/SetValue alias order methods; array-of-ID flag.</td></tr>
@@ -1204,8 +1204,7 @@ Progress:SetValue(nil) -- Indeterminate.</code></pre>
     Height = 140, ScaleType = Enum.ScaleType.Fit,
 })</code></pre>
           <p>
-            Use a Roblox image content URL. Sprite sheets use AddAnimatedImage;
-            see <a href="#animation">Animated images</a>.
+            Use a Roblox image content URL.
           </p>
         </section>
 
@@ -1585,43 +1584,6 @@ Section:AddCard({ Title = "Custom image", Icon = "rbxassetid://YOUR_IMAGE_ID" })
             Records accept Icon (or Image), Color, Tile and Filled. For image
             tinting also use Tint true. Full aliases are in Core/Icons.luau.
             Account avatars always use the player's headshot.
-          </p>
-        </section>
-
-        <section id="animation">
-          <h2>Animated images</h2>
-          <p>
-            Roblox cannot play GIFs directly. Convert to a sprite sheet:
-            equal-size frames in a grid, uploaded as one Roblox image.
-          </p>
-          <ol>
-            <li>Extract GIF frames with a GIF tool or ffmpeg.</li>
-            <li>Pack into a grid; record frame dimensions and column count.</li>
-            <li>
-              Keep the image at most 1024 × 1024 pixels to avoid upload
-              downscaling that breaks frame offsets.
-            </li>
-            <li>Upload and use the Roblox image ID.</li>
-          </ol>
-          <pre><code class="language-luau">local Animation = Card:AddAnimatedImage({
-    Title = "Preview", Image = "rbxassetid://YOUR_SPRITE_SHEET_ID",
-    FrameSize = Vector2.new(128, 128), Columns = 4, Frames = 16,
-    FPS = 12, Loop = true, Autoplay = true, Speed = 1, Height = 128,
-})
-Animation:Pause()
-Animation:Play()</code></pre>
-          <p>
-            Required: Image, FrameSize, Columns, Frames. Defaults: FPS 12, Speed
-            1, Loop true, Autoplay true. FrameSize is measured in source-image
-            pixels. Card icons accept the same frame options through
-            AnimatedIcon.
-          </p>
-          <p>
-            <code>MacUI.AnimatedImage.new(options)</code> creates a standalone
-            object with Instance, Play, Pause, SetSpeed, SetFrame, IsPlaying and
-            Destroy methods. Frame indices are zero-based. Animations share one
-            Heartbeat; hidden objects skip advancement, and the last destroyed
-            animation releases the scheduler.
           </p>
         </section>
 
