@@ -189,6 +189,25 @@ function Section:AddPrioritySelector(options): any
 	return element
 end
 
+function Section:AddUpdateLog(options): any
+	options = table.clone(options or {})
+	local host = self:AddCard({ Title = options.Title or "Update Logs", Searchable = false })
+	host.header.Visible = false
+	host.content:FindFirstChildOfClass("UIPadding").PaddingTop = UDim.new(0, Theme.get("SpacingMedium"))
+	local ok, element = pcall(host.AddUpdateLog, host, options)
+	if not ok then host:Destroy(); error(element, 2) end
+	local setVisible, onDestroy = element.SetVisible, element.onDestroy
+	element.SetVisible = function(control, visible)
+		setVisible(control, visible)
+		host:SetVisible(visible)
+	end
+	element.onDestroy = function(control)
+		onDestroy(control)
+		host:Destroy()
+	end
+	return element
+end
+
 function Section:_forget(card)
 	local index = table.find(self.cards, card)
 	if index then

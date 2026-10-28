@@ -447,7 +447,8 @@
           ><a href="#installation">Installation</a
           ><a href="#window-options">Window options</a
           ><a href="#structure">Pages, sections &amp; cards</a
-          ><a href="#controls">Controls</a><a href="#window-api">Window API</a
+          ><a href="#controls">Controls</a><a href="#update-log">Update Logs</a
+          ><a href="#window-api">Window API</a
           ><a href="#account">Account profile</a
           ><a href="#notifications">Notifications &amp; dialogs</a
           ><a href="#search">Search &amp; palette</a
@@ -959,7 +960,7 @@ Group:AddDropdown({ Id = "sample-quality", Title = "Quality", Options = { "Low",
               <tbody>
                 <tr><td>Window (Window.Options)</td><td>MacUI:CreateWindow</td><td><a href="#window-options">All window options</a></td><td>Window; <a href="#window-api">navigation, visibility, sizing, flags, overlays, Destroy</a>. Owns pages, Store and Registry.</td></tr>
                 <tr><td>Page; tab navigation</td><td>Window:AddPage</td><td>Id, Title, Description, Icon, Badge, Group, Keywords, Aliases, Build, Sidebar</td><td>Page; AddSection, GetSections, CardCount, ScrollTo, EnsureBuilt, SetTitle, SetBadge, Destroy. No separate Tab type or AddTab.</td></tr>
-                <tr><td>Section</td><td>Page:AddSection</td><td>Title, Description, Layout (List/Grid), Columns</td><td>Section; AddCard, AddPrioritySelector, AddToggleDropdownGroup, GetCards, SetVisible, Destroy. No Section Id option or saved value.</td></tr>
+                <tr><td>Section</td><td>Page:AddSection</td><td>Title, Description, Layout (List/Grid), Columns</td><td>Section; AddCard, AddPrioritySelector, AddUpdateLog, AddToggleDropdownGroup, GetCards, SetVisible, Destroy. No Section Id option or saved value.</td></tr>
                 <tr><td>Card</td><td>Section:AddCard</td><td>Id, Title, Description, Icon, AnimatedIcon, Badge, Toggle, Default, Callback, Collapsible, DefaultExpanded, Keywords, Aliases, Searchable, NavigateTo, Popover, Layout, Columns, UniqueChoices, Responsive</td><td>Card; all listed Add* controls, AddAction, GetControls, SetExpanded/IsExpanded, SetEnabled/GetEnabled, SetTitle, SetDescription, SetBadge, SetLoading, SetDisabled, SetVisible, Focus, Flash, Destroy. Toggle uses &lt;Id&gt;.enabled.</td></tr>
                 <tr><td>Button</td><td>Card:AddButton</td><td>Common + Label, Variant, Align, SearchTitle, Callback; Title is button text</td><td>Button; common methods + SetText. Action callback, no bound state.</td></tr>
                 <tr><td>Toggle</td><td>Card:AddToggle</td><td>Common + Default, Callback, OnColor, OffColor</td><td>Toggle; common methods; boolean flag.</td></tr>
@@ -979,6 +980,7 @@ Group:AddDropdown({ Id = "sample-quality", Title = "Quality", Options = { "Low",
                 <tr><td>AnimatedImage in Card</td><td>Card:AddAnimatedImage</td><td>Image, Height, FrameSize, Columns, Frames, FPS, Loop, Autoplay, Speed, Title, Description, LayoutOrder</td><td>Existing alias of AddImage; same Image wrapper, Play/Pause; no flag.</td></tr>
                 <tr><td>AnimatedImage standalone</td><td>MacUI.AnimatedImage.new</td><td>Image, FrameSize, Columns, Frames, FPS, Loop, Autoplay, Speed, Size</td><td>AnimatedImage with Instance; Play, Pause, SetFrame, SetSpeed, IsPlaying, Destroy. Caller parents Instance and owns cleanup.</td></tr>
                 <tr><td>PrioritySelector (Options, Item)</td><td>Section:AddPrioritySelector; Card:AddPrioritySelector</td><td>Common + Items, Default (ID order), Columns, OnChanged; Callback alias</td><td>PrioritySelector; GetOrder, SetOrder, Move, SetItems and common methods. GetValue/SetValue alias order methods; array-of-ID flag.</td></tr>
+                <tr><td>UpdateLog (Options, Entry)</td><td>Section:AddUpdateLog; Card:AddUpdateLog</td><td>Id, Title, Version, Date, InitialVisibleCount, Expandable, LayoutOrder</td><td>UpdateLog; GetWriters, AddEntry, GetEntries, Clear, SetVersion, SetExpanded, IsExpanded, SetVisible, SetDisabled, SetTitle, Destroy. Local display state; no flag.</td></tr>
                 <tr><td>ToggleDropdownGroup</td><td>Section:AddToggleDropdownGroup; Card:AddToggleDropdownGroup</td><td>Card options + DefaultEnabled, DefaultExpanded, Columns, Responsive, Layout = CompactGrid; UniqueChoices retained</td><td>Card adapter with ClassName ToggleDropdownGroup; AddDropdown and Card methods. Own &lt;Id&gt;.enabled plus independent child flags; never aliases PrioritySelector.</td></tr>
                 <tr><td>Popover (PopupManager)</td><td>Feature Card:SetExpanded; dropdown/color Open</td><td>Card Popover: OpenOn, CloseOnOutsideClick, CloseOnEscape, CloseOnMouseLeave=false, CloseOnInteraction=false</td><td>Owned overlay; Card:SetExpanded(false) or control:Close. No public AddPopover. Existing internal popup handles use close().</td></tr>
                 <tr><td>Tooltip (Display.tooltip)</td><td>Card:AddAction; Window:AddHeaderAction</td><td>Tooltip string alongside Icon/Text and Callback</td><td>Owned hover overlay; action returns GUI button; no AddTooltip or saved state.</td></tr>
@@ -1000,7 +1002,7 @@ Group:AddDropdown({ Id = "sample-quality", Title = "Quality", Options = { "Low",
             Two windows may reuse IDs because each owns its Store and Registry.
           </p>
           <p>
-            Section creates a headerless Card host for a direct PrioritySelector; Destroy removes that host.
+            Section creates a headerless Card host for a direct PrioritySelector or UpdateLog; Destroy removes that host.
             Card owns nested selectors/groups; Section owns Cards; Window owns pages and overlays.
             Hiding or reopening a host keeps values and order. A PrioritySelector clears its
             popover selection when its host hides or collapses; destruction disconnects observers.
@@ -1077,6 +1079,63 @@ TasksPriority:SetItems({ { Id = "task-a", Label = "Gather supplies" }, { Id = "t
             and coalesces legacy imports. Filters still demonstrates ToggleDropdownGroup separately.
             None of those feature names, room labels or flag mappings belong to the selector module.
           </p>
+          <h3 id="update-log">UpdateLog: feature changes</h3>
+          <p>
+            Mount a full-width log in a normal Section, or inside an existing Card.
+            The demo places it below Dashboard Quick actions. Entries preserve registration order;
+            34px preview rows use small tinted +, ~, − markers for Added, Fixed and Removed.
+            Descriptions stay neutral and truncate to one line; rows are informational and do not
+            open overlays or receive button focus. Text remains plain, including
+            Unicode and markup-like characters. A count badge replaces the footer breakdown.
+          </p>
+          <pre><code class="language-luau">local log = Dashboard:AddSection({}):AddUpdateLog({
+    Id = "feature-updates", Title = "Update Logs",
+    InitialVisibleCount = 5, Expandable = true,
+})
+local add, fix, remove = log:GetWriters()
+-- Example descriptions: replace with changes from your own project.
+add("Priority Selector component")
+fix("Popover closing while dragging a slider")
+remove("Legacy priority controls")</code></pre>
+          <p>
+            Keep registration in a separate module. MacUI's built-in authoring file is
+            <code>src/shared/UILibrary/Data/UpdateLogs.luau</code> and describes actual MacUI changes.
+            It is exported as <code>MacUI.UpdateLogs</code>. Call it once per log at page construction:
+            <code>MacUI.UpdateLogs(log:GetWriters())</code>. Do not also register those entries in a
+            tab-show callback. Reopening pages and switching themes keep the existing list.
+            For your own data module, use the same scoped callback:
+          </p>
+          <pre><code class="language-luau">-- Data/UpdateLogs.luau: example authoring module
+return function(add, fix, remove)
+    add("New feature description")
+    fix("Bug fix description")
+    remove("Removed feature description")
+end</code></pre>
+          <p>
+            GetWriters returns three local functions; no globals or changes to table.remove.
+            Each writer returns a monotonically increasing numeric entry ID. AddEntry accepts
+            "added", "fixed" or "removed" and non-empty text. GetEntries returns copies of
+            { Id, Type, Text } records. Clear removes all rows and returns to “No updates yet.”
+            SetVersion(stringOrNil) updates or hides the version. Version and Date are optional
+            caller-supplied strings; MacUI fabricates neither. Title defaults to “Update Logs”.
+          </p>
+          <p>
+            InitialVisibleCount defaults to 5 and must be a positive integer.
+            With that default, 5 or fewer entries hide View all; the sixth entry reveals it.
+            View all appears only when there are more entries than the preview limit.
+            It reveals every registered row inline and changes to Show less, which restores
+            the preview. SetExpanded(true/false) and IsExpanded control the same inline state.
+            Automatic sizing grows the existing Dashboard scroller; no modal, overlay, page
+            change or nested scroller is created. New registrations immediately update the list
+            and count, preserving registration order and expansion state across page switches.
+            Expandable = false hides the button; programmatic SetExpanded remains available.
+            Destroy removes rows, listeners and the Section-created host. UpdateLog uses no
+            saved flags, polling or Heartbeat listeners.
+          </p>
+          <pre><code class="language-luau">log:SetExpanded(true) -- Show all rows in the same Dashboard section.
+log:SetExpanded(false) -- Restore the compact preview.
+local expanded = log:IsExpanded()
+local entries = log:GetEntries() -- Copies of { Id, Type, Text } records.</code></pre>
           <p>
             Create controls through Card. Common options: <code>Id</code>,
             <code>Title</code>, <code>Description</code>, <code>Callback</code>,
@@ -1319,7 +1378,8 @@ Progress:SetValue(nil) -- Indeterminate.</code></pre>
             <code>MacUI:RegisterTheme(name, tokens)</code>,
             <code>MacUI:SetReducedMotion(bool)</code>. Advanced exports:
             <code>MacUI.Theme</code>, <code>MacUI.Icons</code>,
-            <code>MacUI.AnimatedImage</code>.
+            <code>MacUI.AnimatedImage</code>. <code>MacUI.UpdateLogs</code> is the optional
+            scoped callback for registering the library's current feature changes.
           </p>
         </section>
 
@@ -1493,6 +1553,7 @@ Window:SetTheme("Midnight")</code></pre>
             <code>TextPrimary</code> <code>TextSecondary</code>
             <code>TextMuted</code> <code>TextDisabled</code> <code>Accent</code>
             <code>Success</code> <code>Warning</code> <code>Danger</code>
+            <code>UpdateAdded</code> <code>UpdateFixed</code> <code>UpdateRemoved</code> <code>UpdateText</code>
             <code>Palette</code> <code>PaletteBorder</code>
             <code>PaletteSelected</code> <code>PaletteDivider</code>
             <code>PalettePlaceholder</code> <code>Knob</code>

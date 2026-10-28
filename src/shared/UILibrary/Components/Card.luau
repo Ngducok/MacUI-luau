@@ -17,6 +17,7 @@ local CONTROLS = {
 	Slider = require(Components.Slider),
 	Dropdown = require(Components.Dropdown),
 	PrioritySelector = require(Components.PrioritySelector),
+	UpdateLog = require(Components.UpdateLog),
 	Button = require(Components.Button),
 	Input = require(Components.Input),
 	Keybind = require(Components.Keybind),

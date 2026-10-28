@@ -107,6 +107,11 @@ return function(parent: Instance?)
 		})
 	end
 
+	local Updates = Dashboard:AddSection({}):AddUpdateLog({
+		Id = "feature-updates", Title = "Update Logs", InitialVisibleCount = 5,
+	})
+	UI.UpdateLogs(Updates:GetWriters())
+
 	-- General
 
 	local General = Window:AddPage({ Id = "general", Title = "General", Icon = "gear" })

@@ -53,6 +53,10 @@ local Dark = {
 	Success = Color3.fromRGB(48, 209, 88),
 	Warning = Color3.fromRGB(255, 159, 10),
 	Danger = Color3.fromRGB(255, 69, 58),
+	UpdateAdded = Color3.fromRGB(96, 202, 139),
+	UpdateFixed = Color3.fromRGB(239, 164, 94),
+	UpdateRemoved = Color3.fromRGB(240, 120, 121),
+	UpdateText = Color3.fromRGB(219, 219, 224),
 
 	Palette = Color3.fromRGB(27, 27, 29),
 	PaletteBorder = Color3.fromRGB(69, 69, 72),
@@ -89,6 +93,10 @@ local Light = setmetatable({
 	Success = Color3.fromRGB(40, 167, 69),
 	Warning = Color3.fromRGB(230, 140, 0),
 	Danger = Color3.fromRGB(230, 57, 47),
+	UpdateAdded = Color3.fromRGB(28, 121, 72),
+	UpdateFixed = Color3.fromRGB(155, 79, 24),
+	UpdateRemoved = Color3.fromRGB(183, 45, 45),
+	UpdateText = Color3.fromRGB(28, 28, 30),
 
 	Palette = Color3.fromRGB(252, 252, 253),
 	PaletteBorder = Color3.fromRGB(208, 208, 212),

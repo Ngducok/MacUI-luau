@@ -10,6 +10,7 @@ local MacUI = {
 	Theme = Theme,
 	Icons = Icons,
 	AnimatedImage = AnimatedImage,
+	UpdateLogs = require(script.Data.UpdateLogs),
 }
 
 function MacUI:CreateWindow(options: Window.Options?)
