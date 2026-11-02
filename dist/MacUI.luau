@@ -2885,11 +2885,8 @@ function PrioritySelector.new(ctx, parent, options: Options)
 		CellSize = UDim2.fromOffset(180, 38), CellPadding = UDim2.fromOffset(Theme.get("SpacingSmall"), Theme.get("SpacingSmall")),
 		SortOrder = Enum.SortOrder.LayoutOrder, Parent = self.grid,
 	})
+	self.gridLayout.FillDirectionMaxCells = if type(options.Columns) == "number" then options.Columns else 2
 	self.cleanup:connect(self.grid:GetPropertyChangedSignal("AbsoluteSize"), function() self:_fit() end)
-	self.cleanup:connect(self.gridLayout:GetPropertyChangedSignal("AbsoluteContentSize"), function()
-		local scale = self.gridLayout.AbsoluteCellSize.Y / 38
-		if scale > 0 then self.grid.Size = UDim2.new(1, 0, 0, math.round(self.gridLayout.AbsoluteContentSize.Y / scale)) end
-	end)
 	local id, loaded = ctx.store:define(options.Id, default, function(value) return self:_reconcile(value, false) end)
 	self.id, self.order = id, table.clone(loaded)
 	self.cleanup:add(function() ctx.store:remove(id) end)
@@ -3066,7 +3063,16 @@ function PrioritySelector:_fit()
 		local cell = math.max(1, math.floor((width - gap * (columns - 1)) / columns))
 		if self.cell ~= cell then self.cell = cell; self.gridLayout.CellSize = UDim2.fromOffset(cell, 38) end
 	end
+	self:_syncHeight()
 	if self.panel then self:_fitPicker() end
+end
+
+-- Height derives from the item count and columns (rows * 38 + gaps) so it is exact
+-- even when the card is collapsed (width 0) or during a UIScale tween.
+function PrioritySelector:_syncHeight()
+	local columns = math.max(1, self.columns or (if type(self.options.Columns) == "number" then self.options.Columns else 2))
+	local rows = math.ceil(#self.items / columns)
+	self.grid.Size = UDim2.new(1, 0, 0, rows * 38 + math.max(0, rows - 1) * Theme.get("SpacingSmall"))
 end
 
 function PrioritySelector:_buildItems()
